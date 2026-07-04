@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { CheckDiario, Usuario, ItemDieta, CheckDieta } from '../types';
-import { Flame, CheckCircle, Trophy, Sparkles, LogOut, Check, Utensils } from 'lucide-react';
+import { Flame, Trophy, Sparkles, LogOut, Check, Utensils, Settings, X, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface HojeViewProps {
@@ -21,13 +21,20 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
   const [checksDieta, setChecksDieta] = useState<CheckDieta[]>([]);
   const [loadingDieta, setLoadingDieta] = useState<boolean>(true);
 
+  // Challenge config state
+  const [challengeConfig, setChallengeConfig] = useState<{ id: number; data_inicio: string; dia_lixo_semana: number } | null>(null);
+  const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [configDataInicio, setConfigDataInicio] = useState<string>('2026-07-06');
+  const [configDiaLixo, setConfigDiaLixo] = useState<number>(6);
+  const [savingConfig, setSavingConfig] = useState<boolean>(false);
+
   const [todayCheck, setTodayCheck] = useState<Omit<CheckDiario, 'id' | 'usuario_id'>>({
     data: '',
     treino: false,
+    dieta: false,
     zero_doce: false,
     zero_besteira: false,
-    agua: false,
-    sono: false
+    agua: false
   });
 
   // Helper for YYYY-MM-DD
@@ -55,7 +62,22 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
     }
   };
 
+  const loadChallengeConfig = async () => {
+    try {
+      const config = await api.getDesafioConfig();
+      setChallengeConfig(config);
+      setConfigDataInicio(config.data_inicio);
+      setConfigDiaLixo(config.dia_lixo_semana);
+    } catch (err) {
+      console.error('Erro ao carregar config do desafio:', err);
+    }
+  };
+
   // Load and calculate today's data, streak, and countdown
+  useEffect(() => {
+    loadChallengeConfig();
+  }, []);
+
   useEffect(() => {
     // 1. Find today's check
     const currentToday = checks.find(c => c.data === todayStr);
@@ -63,31 +85,28 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
       setTodayCheck({
         data: currentToday.data,
         treino: currentToday.treino,
+        dieta: currentToday.dieta,
         zero_doce: currentToday.zero_doce,
         zero_besteira: currentToday.zero_besteira,
-        agua: currentToday.agua,
-        sono: currentToday.sono
+        agua: currentToday.agua
       });
     } else {
       setTodayCheck({
         data: todayStr,
         treino: false,
+        dieta: false,
         zero_doce: false,
         zero_besteira: false,
-        agua: false,
-        sono: false
+        agua: false
       });
     }
 
-    // 2. Calculate challenge start & remaining days
-    if (checks.length > 0) {
-      const earliestCheck = checks.reduce((earliest, current) => {
-        return current.data < earliest ? current.data : earliest;
-      }, checks[0].data);
-
-      const start = new Date(earliestCheck);
-      const today = new Date(todayStr);
-      const diffTime = Math.abs(today.getTime() - start.getTime());
+    // 2. Calculate challenge start & remaining days based on config
+    const startDateStr = challengeConfig?.data_inicio || '2026-07-06';
+    const start = new Date(startDateStr + 'T12:00:00');
+    const today = new Date(todayStr + 'T12:00:00');
+    const diffTime = today.getTime() - start.getTime();
+    if (diffTime >= 0) {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       const elapsed = Math.min(diffDays, 90);
       setDaysRemaining(90 - elapsed);
@@ -100,15 +119,15 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
     
     // 4. Load diet checklist
     loadDietaData();
-  }, [checks, todayStr]);
+  }, [checks, todayStr, challengeConfig]);
 
   function calculateCurrentStreak(list: CheckDiario[]): number {
     if (!list || list.length === 0) return 0;
     
     const activeCheckDates = new Set(
       list
-         // Include any day with at least one active habit check-in
-        .filter(c => c.treino || c.zero_doce || c.zero_besteira || c.agua || c.sono)
+        // Include any day with at least one active habit check-in
+        .filter(c => c.treino || c.dieta || c.zero_doce || c.zero_besteira || c.agua)
         .map(c => c.data)
     );
 
@@ -128,7 +147,7 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
     }
 
     let count = 0;
-    const tempDate = new Date(startSearchStr);
+    const tempDate = new Date(startSearchStr + 'T12:00:00');
 
     while (true) {
       const checkStr = getLocalDateString(tempDate);
@@ -143,7 +162,7 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
     return count;
   }
 
-  const handleToggleHabit = async (habitKey: 'treino' | 'zero_doce' | 'zero_besteira' | 'agua' | 'sono') => {
+  const handleToggleHabit = async (habitKey: 'treino' | 'dieta' | 'zero_doce' | 'zero_besteira' | 'agua') => {
     if (loading) return;
     setLoading(true);
 
@@ -167,18 +186,19 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
   };
 
   const handleToggleDietMeal = async (itemId: number) => {
-    const isChecked = checksDieta.some(c => c.item_dieta_id === itemId && c.cumprido);
+    const currentCheck = checksDieta.find(c => c.item_dieta_id === itemId);
+    const isChecked = !!currentCheck?.cumprido;
     
     // Optimistic Update
     const updatedChecks = isChecked
       ? checksDieta.filter(c => c.item_dieta_id !== itemId)
-      : [...checksDieta, { id: 0, usuario_id: usuario.id, item_dieta_id: itemId, data: todayStr, cumprido: true }];
+      : [...checksDieta, { id: 0, usuario_id: usuario.id, item_dieta_id: itemId, data: todayStr, cumprido: true, e_refeicao_livre: false }];
     
     setChecksDieta(updatedChecks);
 
     try {
       await api.saveChecksDieta(todayStr, [
-        { item_dieta_id: itemId, cumprido: !isChecked }
+        { item_dieta_id: itemId, cumprido: !isChecked, e_refeicao_livre: false }
       ]);
       const currentChecks = await api.getChecksDieta(todayStr);
       setChecksDieta(currentChecks);
@@ -189,12 +209,58 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
     }
   };
 
+  const handleToggleFreeMeal = async (itemId: number) => {
+    const currentCheck = checksDieta.find(c => c.item_dieta_id === itemId);
+    if (!currentCheck || !currentCheck.cumprido) return;
+
+    const wasFree = !!currentCheck.e_refeicao_livre;
+
+    // Optimistic Update: make this free, and clear others for today
+    const updatedChecks = checksDieta.map(c => {
+      if (c.item_dieta_id === itemId) {
+        return { ...c, e_refeicao_livre: !wasFree };
+      } else {
+        return { ...c, e_refeicao_livre: false };
+      }
+    });
+    setChecksDieta(updatedChecks);
+
+    try {
+      await api.saveChecksDieta(todayStr, [
+        { item_dieta_id: itemId, cumprido: true, e_refeicao_livre: !wasFree }
+      ]);
+      const currentChecks = await api.getChecksDieta(todayStr);
+      setChecksDieta(currentChecks);
+      await onRefreshChecks();
+    } catch (err) {
+      console.error('Erro ao salvar refeição livre:', err);
+      loadDietaData();
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      await api.saveDesafioConfig({
+        data_inicio: configDataInicio,
+        dia_lixo_semana: configDiaLixo
+      });
+      await loadChallengeConfig();
+      setShowSettings(false);
+      await onRefreshChecks();
+    } catch (err) {
+      alert('Erro ao salvar configurações do desafio');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   const completedCount = [
     todayCheck.treino,
+    todayCheck.dieta,
     todayCheck.zero_doce,
     todayCheck.zero_besteira,
-    todayCheck.agua,
-    todayCheck.sono
+    todayCheck.agua
   ].filter(Boolean).length;
 
   const totalDietMeals = itensDieta.length;
@@ -256,11 +322,15 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
 
   const habits = [
     { key: 'treino' as const, label: 'Treino', emoji: '🏋️', description: 'Atividade física', activeBg: isJessica ? 'bg-rose-500' : 'bg-emerald-500' },
+    { key: 'dieta' as const, label: 'Dieta Regulada', emoji: '🥗', description: 'Seguiu a dieta certinho', activeBg: isJessica ? 'bg-amber-500' : 'bg-orange-500' },
     { key: 'zero_doce' as const, label: 'Zero Doce', emoji: '🚫🍬', description: 'Sem açúcar refinado', activeBg: isJessica ? 'bg-orange-500' : 'bg-teal-500' },
     { key: 'zero_besteira' as const, label: 'Zero Besteira', emoji: '🚫🍟', description: 'Sem fritura ou ultraprocessados', activeBg: isJessica ? 'bg-pink-500' : 'bg-emerald-600' },
     { key: 'agua' as const, label: 'Água (3L+)', emoji: '💧', description: 'Hidratação batida', activeBg: 'bg-blue-500' },
-    { key: 'sono' as const, label: 'Sono Regular', emoji: '😴', description: '7h a 8h de descanso', activeBg: 'bg-indigo-500' },
   ];
+
+  // Determine if today is Dia do Lixo
+  const todayDateObj = new Date(todayStr + 'T12:00:00');
+  const isDiaLixo = challengeConfig ? todayDateObj.getDay() === challengeConfig.dia_lixo_semana : false;
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 pb-28">
@@ -280,17 +350,111 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
           </div>
         </div>
 
-        <button
-          id="btn-logout"
-          onClick={onLogout}
-          className="p-2 text-slate-400 hover:text-slate-600 active:scale-95 transition-all rounded-lg hover:bg-slate-50 cursor-pointer"
-          title="Sair"
-        >
-          <LogOut className="w-5 h-5" />
-        </button>
+        <div className="flex items-center space-x-1">
+          <button
+            id="btn-settings"
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-2 text-slate-400 hover:text-slate-600 active:scale-95 transition-all rounded-lg hover:bg-slate-50 cursor-pointer"
+            title="Configurações do Desafio"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+          
+          <button
+            id="btn-logout"
+            onClick={onLogout}
+            className="p-2 text-slate-400 hover:text-slate-600 active:scale-95 transition-all rounded-lg hover:bg-slate-50 cursor-pointer"
+            title="Sair"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <div className="px-5 py-6 space-y-6 w-full max-w-md mx-auto">
+
+        {/* Slide-down Settings Panel */}
+        <AnimatePresence>
+          {showSettings && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-white border border-slate-100 rounded-2xl p-5 shadow-md space-y-4 overflow-hidden"
+            >
+              <div className="flex justify-between items-center border-b border-slate-50 pb-2">
+                <h3 className="text-sm font-display font-extrabold text-slate-900 flex items-center space-x-1.5">
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <span>Configuração do Desafio</span>
+                </h3>
+                <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">DATA DE INÍCIO DO DESAFIO</label>
+                  <div className="relative">
+                    <Calendar className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      id="config-data-inicio"
+                      type="date"
+                      value={configDataInicio}
+                      onChange={(e) => setConfigDataInicio(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-500 font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1">DIA DO LIXO DA SEMANA</label>
+                  <select
+                    id="config-dia-lixo"
+                    value={configDiaLixo}
+                    onChange={(e) => setConfigDiaLixo(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-500 font-semibold bg-white"
+                  >
+                    <option value={0}>Domingo</option>
+                    <option value={1}>Segunda-feira</option>
+                    <option value={2}>Terça-feira</option>
+                    <option value={3}>Quarta-feira</option>
+                    <option value={4}>Quinta-feira</option>
+                    <option value={5}>Sexta-feira</option>
+                    <option value={6}>Sábado</option>
+                  </select>
+                </div>
+
+                <button
+                  id="btn-save-config"
+                  onClick={handleSaveConfig}
+                  disabled={savingConfig}
+                  className="w-full py-2 bg-slate-900 text-white rounded-xl font-bold active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer text-center"
+                >
+                  {savingConfig ? 'Salvando...' : 'Salvar Configurações'}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Dia do Lixo Top Banner */}
+        {isDiaLixo && (
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-gradient-to-r from-amber-400 to-orange-400 rounded-2xl p-4 text-white shadow-md relative overflow-hidden flex items-center justify-between border border-amber-300"
+          >
+            <div className="flex items-center space-x-3">
+              <span className="text-3xl animate-bounce">🎉</span>
+              <div>
+                <h3 className="font-display font-black text-sm leading-tight">Hoje é o Dia do Lixo!</h3>
+                <p className="text-[11px] opacity-90 font-semibold">Aproveite sua refeição livre e a marque na lista abaixo.</p>
+              </div>
+            </div>
+            <div className="absolute -right-3 -bottom-3 opacity-20 text-6xl">🍕</div>
+          </motion.div>
+        )}
         
         {/* Game Stats (Grid: Streak and Countdown) */}
         <div className="grid grid-cols-2 gap-3">
@@ -465,50 +629,76 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
           ) : (
             <div className="space-y-3">
               {itensDieta.map(item => {
-                const isChecked = checksDieta.some(c => c.item_dieta_id === item.id && c.cumprido);
+                const checkObj = checksDieta.find(c => c.item_dieta_id === item.id);
+                const isChecked = !!checkObj?.cumprido;
+                const isFreeMeal = !!checkObj?.e_refeicao_livre;
+
                 return (
-                  <button
+                  <div
                     key={item.id}
                     id={`diet-meal-card-${item.id}`}
                     onClick={() => handleToggleDietMeal(item.id)}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all active:scale-[0.98] text-left relative overflow-hidden ${
+                    className={`w-full p-4 rounded-2xl border cursor-pointer transition-all active:scale-[0.98] text-left relative overflow-hidden ${
                       isChecked 
                         ? 'bg-white border-slate-100 shadow-md transform translate-y-[-2px]' 
                         : 'bg-white border-slate-100 shadow-sm hover:border-slate-200'
                     }`}
                   >
-                    <div className="flex items-center space-x-4 z-10">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-all duration-300 ${
-                        isChecked ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-50'
-                      }`}>
-                        {isChecked ? <Check className="w-6 h-6 stroke-[3]" /> : '🥗'}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4 z-10">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-all duration-300 ${
+                          isChecked ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-50'
+                        }`}>
+                          {isChecked ? <Check className="w-6 h-6 stroke-[3]" /> : '🥗'}
+                        </div>
+                        <div className="min-w-0 pr-6">
+                          <h3 className={`font-display font-bold text-sm truncate transition-colors ${isChecked ? 'text-slate-900' : 'text-slate-700'}`}>
+                            {item.nome_refeicao}
+                          </h3>
+                          {item.descricao ? (
+                            <p className="text-xs text-slate-400 font-medium truncate mt-0.5">{item.descricao}</p>
+                          ) : (
+                            <span className="text-[10px] italic text-slate-300">Sem descrição</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0 pr-6">
-                        <h3 className={`font-display font-bold text-sm truncate transition-colors ${isChecked ? 'text-slate-900' : 'text-slate-700'}`}>
-                          {item.nome_refeicao}
-                        </h3>
-                        {item.descricao ? (
-                          <p className="text-xs text-slate-400 font-medium truncate mt-0.5">{item.descricao}</p>
-                        ) : (
-                          <span className="text-[10px] italic text-slate-300">Sem descrição</span>
-                        )}
+
+                      <div className="z-10 flex-shrink-0">
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                          isChecked 
+                            ? 'bg-amber-500 border-amber-500 text-white'
+                            : 'border-slate-200 bg-white'
+                        }`}>
+                          {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="z-10 flex-shrink-0">
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                        isChecked 
-                          ? 'bg-amber-500 border-amber-500 text-white'
-                          : 'border-slate-200 bg-white'
-                      }`}>
-                        {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    {/* Secondary checkbox for "Refeição Livre" on Dia do Lixo */}
+                    {isChecked && isDiaLixo && (
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between relative z-20">
+                        <button
+                          id={`free-meal-btn-${item.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleFreeMeal(item.id);
+                          }}
+                          className={`px-3 py-1.5 text-[11px] font-bold transition-all flex items-center space-x-1 cursor-pointer rounded-xl ${
+                            isFreeMeal
+                              ? 'bg-amber-100 text-amber-700 border border-amber-200 shadow-sm animate-pulse'
+                              : 'bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-100'
+                          }`}
+                        >
+                          <span>🎉</span>
+                          <span>{isFreeMeal ? 'Minha Refeição Livre! 🍕' : 'Essa foi minha refeição livre?'}</span>
+                        </button>
                       </div>
-                    </div>
+                    )}
 
                     {isChecked && (
                       <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-amber-500" />
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>

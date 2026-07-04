@@ -19,7 +19,7 @@ export interface DB {
   getUsuarioById(id: number): Promise<any>;
   getTodosUsuarios(): Promise<any[]>;
   getCheckDiario(usuarioId: number, data: string): Promise<any>;
-  saveCheckDiario(usuarioId: number, data: string, checks: { treino: boolean; zero_doce: boolean; zero_besteira: boolean; agua: boolean; sono: boolean }): Promise<any>;
+  saveCheckDiario(usuarioId: number, data: string, checks: { treino: boolean; zero_doce: boolean; zero_besteira: boolean; agua: boolean; dieta?: boolean }): Promise<any>;
   getChecksDiarios(usuarioId: number): Promise<any[]>;
   getTodosChecksDiarios(): Promise<any[]>;
   
@@ -32,13 +32,17 @@ export interface DB {
   saveItemDieta(usuarioId: number, id: number | undefined, nomeRefeicao: string, descricao: string | undefined, ordem: number): Promise<any>;
   deleteItemDieta(usuarioId: number, id: number): Promise<void>;
   getChecksDieta(usuarioId: number, data: string): Promise<any[]>;
-  saveChecksDieta(usuarioId: number, data: string, checks: { item_dieta_id: number; cumprido: boolean }[]): Promise<any[]>;
+  saveChecksDieta(usuarioId: number, data: string, checks: { item_dieta_id: number; cumprido: boolean; e_refeicao_livre?: boolean }[]): Promise<any[]>;
   getTodosChecksDieta(usuarioId: number): Promise<any[]>;
 
   // Photos
   getFotosProgresso(usuarioId: number): Promise<any[]>;
   addFotoProgresso(usuarioId: number, data: string, fotoUrl: string, legenda?: string): Promise<any>;
   getTodasFotosProgresso(): Promise<any[]>;
+
+  // Challenge Config
+  getConfiguracaoDesafio(): Promise<any>;
+  saveConfiguracaoDesafio(dataInicio: string, diaLixoSemana: number): Promise<any>;
 }
 
 // Ensure local data directory exists for JSON fallback
@@ -159,6 +163,30 @@ class PostgresDB implements DB {
         );
       `);
 
+      // Add e_refeicao_livre to checks_dieta if not exists
+      await client.query(`
+        ALTER TABLE checks_dieta ADD COLUMN IF NOT EXISTS e_refeicao_livre BOOLEAN DEFAULT FALSE;
+      `);
+
+      // Add dieta to checks_diarios if not exists
+      await client.query(`
+        ALTER TABLE checks_diarios ADD COLUMN IF NOT EXISTS dieta BOOLEAN DEFAULT FALSE;
+      `);
+
+      // Copy legacy sono values to dieta so users keep their past stats
+      await client.query(`
+        UPDATE checks_diarios SET dieta = sono WHERE dieta IS FALSE AND sono IS TRUE;
+      `);
+
+      // Create configuracao_desafio table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS configuracao_desafio (
+          id INTEGER PRIMARY KEY,
+          data_inicio VARCHAR(10) NOT NULL,
+          dia_lixo_semana INTEGER NOT NULL
+        );
+      `);
+
       // 2. Insert default users if table is empty
       const { rows } = await client.query('SELECT COUNT(*) FROM usuarios');
       if (parseInt(rows[0].count) === 0) {
@@ -171,6 +199,15 @@ class PostgresDB implements DB {
         }
         // Sync serial sequence
         await client.query("SELECT setval('usuarios_id_seq', (SELECT MAX(id) FROM usuarios))");
+      }
+
+      // Seed configuracao_desafio if empty
+      const configCount = await client.query('SELECT COUNT(*) FROM configuracao_desafio');
+      if (parseInt(configCount.rows[0].count) === 0) {
+        console.log('Seeding default challenge configuration...');
+        await client.query(
+          "INSERT INTO configuracao_desafio (id, data_inicio, dia_lixo_semana) VALUES (1, '2026-07-06', 6) ON CONFLICT DO NOTHING"
+        );
       }
     } catch (err) {
       console.error('Error initializing Postgres DB:', err);
@@ -200,14 +237,15 @@ class PostgresDB implements DB {
     return rows[0] || null;
   }
 
-  async saveCheckDiario(usuarioId: number, data: string, checks: { treino: boolean; zero_doce: boolean; zero_besteira: boolean; agua: boolean; sono: boolean }): Promise<any> {
+  async saveCheckDiario(usuarioId: number, data: string, checks: { treino: boolean; zero_doce: boolean; zero_besteira: boolean; agua: boolean; dieta?: boolean }): Promise<any> {
+    const dietaVal = checks.dieta !== undefined ? checks.dieta : false;
     const { rows } = await this.pool.query(
-      `INSERT INTO checks_diarios (usuario_id, data, treino, zero_doce, zero_besteira, agua, sono)
+      `INSERT INTO checks_diarios (usuario_id, data, treino, zero_doce, zero_besteira, agua, dieta)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (usuario_id, data)
-       DO UPDATE SET treino = EXCLUDED.treino, zero_doce = EXCLUDED.zero_doce, zero_besteira = EXCLUDED.zero_besteira, agua = EXCLUDED.agua, sono = EXCLUDED.sono
+       DO UPDATE SET treino = EXCLUDED.treino, zero_doce = EXCLUDED.zero_doce, zero_besteira = EXCLUDED.zero_besteira, agua = EXCLUDED.agua, dieta = EXCLUDED.dieta
        RETURNING *`,
-      [usuarioId, data, checks.treino, checks.zero_doce, checks.zero_besteira, checks.agua, checks.sono]
+      [usuarioId, data, checks.treino, checks.zero_doce, checks.zero_besteira, checks.agua, dietaVal]
     );
     return rows[0];
   }
@@ -360,8 +398,17 @@ class PostgresDB implements DB {
     return rows;
   }
 
-  async saveChecksDieta(usuarioId: number, data: string, checks: { item_dieta_id: number; cumprido: boolean }[]): Promise<any[]> {
+  async saveChecksDieta(usuarioId: number, data: string, checks: { item_dieta_id: number; cumprido: boolean; e_refeicao_livre?: boolean }[]): Promise<any[]> {
     const savedChecks = [];
+    
+    const hasFreeMeal = checks.some(c => c.e_refeicao_livre);
+    if (hasFreeMeal) {
+      await this.pool.query(
+        'UPDATE checks_dieta SET e_refeicao_livre = FALSE WHERE usuario_id = $1 AND data = $2',
+        [usuarioId, data]
+      );
+    }
+
     for (const check of checks) {
       // Validate ownership of item
       const itemCheck = await this.pool.query(
@@ -373,12 +420,12 @@ class PostgresDB implements DB {
       }
 
       const { rows } = await this.pool.query(
-        `INSERT INTO checks_dieta (usuario_id, item_dieta_id, data, cumprido)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO checks_dieta (usuario_id, item_dieta_id, data, cumprido, e_refeicao_livre)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (item_dieta_id, data)
-         DO UPDATE SET cumprido = EXCLUDED.cumprido
+         DO UPDATE SET cumprido = EXCLUDED.cumprido, e_refeicao_livre = EXCLUDED.e_refeicao_livre
          RETURNING *`,
-        [usuarioId, check.item_dieta_id, data, check.cumprido]
+        [usuarioId, check.item_dieta_id, data, check.cumprido, !!check.e_refeicao_livre]
       );
       savedChecks.push(rows[0]);
     }
@@ -417,6 +464,23 @@ class PostgresDB implements DB {
       'SELECT * FROM fotos_progresso ORDER BY data ASC'
     );
     return rows;
+  }
+
+  async getConfiguracaoDesafio(): Promise<any> {
+    const { rows } = await this.pool.query('SELECT * FROM configuracao_desafio WHERE id = 1');
+    return rows[0] || { id: 1, data_inicio: '2026-07-06', dia_lixo_semana: 6 };
+  }
+
+  async saveConfiguracaoDesafio(dataInicio: string, diaLixoSemana: number): Promise<any> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO configuracao_desafio (id, data_inicio, dia_lixo_semana)
+       VALUES (1, $1, $2)
+       ON CONFLICT (id)
+       DO UPDATE SET data_inicio = EXCLUDED.data_inicio, dia_lixo_semana = EXCLUDED.dia_lixo_semana
+       RETURNING *`,
+      [dataInicio, diaLixoSemana]
+    );
+    return rows[0];
   }
 }
 

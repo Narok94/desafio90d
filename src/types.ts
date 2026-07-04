@@ -15,7 +15,7 @@ export interface CheckDiario {
   zero_doce: boolean;
   zero_besteira: boolean;
   agua: boolean;
-  sono: boolean;
+  dieta: boolean;
 }
 
 export interface ItemDieta {
@@ -32,6 +32,13 @@ export interface CheckDieta {
   item_dieta_id: number;
   data: string; // YYYY-MM-DD
   cumprido: boolean;
+  e_refeicao_livre?: boolean;
+}
+
+export interface ConfiguracaoDesafio {
+  id: number;
+  data_inicio: string;
+  dia_lixo_semana: number;
 }
 
 export interface FotoProgresso {

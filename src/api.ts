@@ -105,7 +105,7 @@ export const api = {
 
   // Participant: Daily Checks
   getChecks: () => request<CheckDiario[]>('/checks'),
-  saveCheck: (data: string, checks: { treino: boolean; zero_doce: boolean; zero_besteira: boolean; agua: boolean; sono: boolean }) =>
+  saveCheck: (data: string, checks: { treino: boolean; dieta: boolean; zero_doce: boolean; zero_besteira: boolean; agua: boolean }) =>
     request<CheckDiario>('/checks', {
       method: 'POST',
       body: JSON.stringify({ data, ...checks }),
@@ -147,7 +147,7 @@ export const api = {
 
   // Participant: Dieta Checks
   getChecksDieta: (data: string) => request<any[]>(`/dieta/checks?data=${data}`),
-  saveChecksDieta: (data: string, checks: { item_dieta_id: number; cumprido: boolean }[]) =>
+  saveChecksDieta: (data: string, checks: { item_dieta_id: number; cumprido: boolean; e_refeicao_livre?: boolean }[]) =>
     request<any[]>('/dieta/checks', {
       method: 'POST',
       body: JSON.stringify({ data, checks }),
@@ -163,4 +163,12 @@ export const api = {
 
   // Admin: Comparative Data
   getComparativo: () => request<ComparativoData[]>('/admin/comparativo'),
+
+  // Challenge Config
+  getDesafioConfig: () => request<any>('/desafio/config'),
+  saveDesafioConfig: (config: { data_inicio: string; dia_lixo_semana: number }) =>
+    request<any>('/desafio/config', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    }),
 };

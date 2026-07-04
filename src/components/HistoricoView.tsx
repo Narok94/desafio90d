@@ -90,10 +90,10 @@ export default function HistoricoView({ usuario, checks }: HistoricoViewProps) {
         usuario_id: usuario.id,
         data: dateStr,
         treino: false,
+        dieta: false,
         zero_doce: false,
         zero_besteira: false,
-        agua: false,
-        sono: false
+        agua: false
       });
     }
   };
@@ -105,10 +105,10 @@ export default function HistoricoView({ usuario, checks }: HistoricoViewProps) {
     
     const count = [
       check.treino,
+      check.dieta,
       check.zero_doce,
       check.zero_besteira,
-      check.agua,
-      check.sono
+      check.agua
     ].filter(Boolean).length;
 
     return {
@@ -246,10 +246,10 @@ export default function HistoricoView({ usuario, checks }: HistoricoViewProps) {
               <div className="grid gap-2.5">
                 {[
                   { key: 'treino', label: 'Treino 🏋️', val: selectedDayCheck.treino },
+                  { key: 'dieta', label: 'Dieta Regulada 🥗', val: selectedDayCheck.dieta },
                   { key: 'zero_doce', label: 'Zero Doce 🚫🍬', val: selectedDayCheck.zero_doce },
                   { key: 'zero_besteira', label: 'Zero Besteira 🚫🍟', val: selectedDayCheck.zero_besteira },
-                  { key: 'agua', label: 'Água (3L+) 💧', val: selectedDayCheck.agua },
-                  { key: 'sono', label: 'Sono Regular 😴', val: selectedDayCheck.sono }
+                  { key: 'agua', label: 'Água (3L+) 💧', val: selectedDayCheck.agua }
                 ].map(habit => (
                   <div
                     key={habit.key}

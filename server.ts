@@ -68,7 +68,7 @@ function calculateStreak(checks: any[]): number {
   // Filter checks with at least one completed habit and sort by date descending
   const activeCheckDates = new Set(
     checks
-      .filter(c => c.treino || c.zero_doce || c.zero_besteira || c.agua || c.sono)
+      .filter(c => c.treino || c.dieta || c.zero_doce || c.zero_besteira || c.agua)
       .map(c => c.data)
   );
 
@@ -191,9 +191,33 @@ app.get('/api/checks', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Challenge configuration endpoints
+app.get('/api/desafio/config', authenticateToken, async (req: any, res) => {
+  try {
+    const config = await db.getConfiguracaoDesafio();
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar configuração do desafio' });
+  }
+});
+
+app.post('/api/desafio/config', authenticateToken, async (req: any, res) => {
+  const { data_inicio, dia_lixo_semana } = req.body;
+  if (!data_inicio || dia_lixo_semana === undefined) {
+    return res.status(400).json({ error: 'Data de início e dia do lixo da semana são obrigatórios' });
+  }
+
+  try {
+    const saved = await db.saveConfiguracaoDesafio(data_inicio, parseInt(dia_lixo_semana));
+    res.json(saved);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar configuração do desafio' });
+  }
+});
+
 // Save/Check a daily habit
 app.post('/api/checks', authenticateToken, async (req: any, res) => {
-  const { data, treino, zero_doce, zero_besteira, agua, sono } = req.body;
+  const { data, treino, zero_doce, zero_besteira, agua, dieta } = req.body;
   if (!data) {
     return res.status(400).json({ error: 'Data é obrigatória' });
   }
@@ -204,7 +228,7 @@ app.post('/api/checks', authenticateToken, async (req: any, res) => {
       zero_doce: !!zero_doce,
       zero_besteira: !!zero_besteira,
       agua: !!agua,
-      sono: !!sono
+      dieta: !!dieta
     });
     res.json(saved);
   } catch (err) {
@@ -451,10 +475,10 @@ app.get('/api/admin/comparativo', authenticateToken, requireAdmin, async (req, r
         const c = checks.find(x => x.data === date);
         if (c) {
           if (c.treino) dayPoints++;
+          if (c.dieta) dayPoints++;
           if (c.zero_doce) dayPoints++;
           if (c.zero_besteira) dayPoints++;
           if (c.agua) dayPoints++;
-          if (c.sono) dayPoints++;
         }
 
         const dietPoints = dietChecksByDate.get(date) || 0;
