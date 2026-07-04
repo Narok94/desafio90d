@@ -10,8 +10,19 @@ import { db, hashPin } from './src/db.js';
 dotenv.config();
 
 const app = express();
+const dbInitPromise = db.initialize();
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'desafio90-super-secret-key-2026';
+
+app.use(async (req, res, next) => {
+  try {
+    await dbInitPromise;
+    next();
+  } catch (err) {
+    console.error("DB Init error:", err);
+    res.status(500).json({ error: 'Database initialization failed' });
+  }
+});
 
 // Allow parsing of large base64 payloads for progress photos
 app.use(express.json({ limit: '20mb' }));
@@ -528,7 +539,7 @@ app.get('/api/admin/comparativo', authenticateToken, requireAdmin, async (req, r
 
 
 // Initialize Database schemas and seed data
-const dbInitPromise = db.initialize().catch(console.error);
+
 
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   const startServer = async () => {
