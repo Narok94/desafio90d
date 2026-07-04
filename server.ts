@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import { put } from '@vercel/blob';
 import { createServer as createViteServer } from 'vite';
-import { db, hashPin } from './src/db.js';
+import { db, hashPin } from './src/db';
 
 dotenv.config();
 
