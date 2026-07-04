@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Usuario, CheckDiario, Medida } from './types';
+import { Usuario, CheckDiario, Medida, FotoProgresso } from './types';
 import { api, getSavedUsuario, clearSession } from './api';
 import LoginView from './components/LoginView';
 import HojeView from './components/HojeView';
@@ -14,6 +14,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('hoje');
   const [checks, setChecks] = useState<CheckDiario[]>([]);
   const [medidas, setMedidas] = useState<Medida[]>([]);
+  const [fotos, setFotos] = useState<FotoProgresso[]>([]);
+  const [loadingFotos, setLoadingFotos] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Load session on startup
@@ -29,6 +31,7 @@ export default function App() {
       setUsuario(null);
       setChecks([]);
       setMedidas([]);
+      setFotos([]);
     };
 
     window.addEventListener('auth-expired', handleAuthExpired);
@@ -40,15 +43,20 @@ export default function App() {
   // Fetch participant-specific data
   const loadParticipantData = async () => {
     if (!usuario || usuario.papel !== 'participante') return;
+    setLoadingFotos(true);
     try {
-      const [checksData, medidasData] = await Promise.all([
+      const [checksData, medidasData, fotosData] = await Promise.all([
         api.getChecks(),
-        api.getMedidas()
+        api.getMedidas(),
+        api.getFotosProgresso()
       ]);
       setChecks(checksData);
       setMedidas(medidasData);
+      setFotos(fotosData);
     } catch (err) {
       console.error('Erro ao carregar dados do participante:', err);
+    } finally {
+      setLoadingFotos(false);
     }
   };
 
@@ -68,6 +76,7 @@ export default function App() {
     setUsuario(null);
     setChecks([]);
     setMedidas([]);
+    setFotos([]);
   };
 
   if (loading) {
@@ -102,6 +111,8 @@ export default function App() {
             usuario={usuario}
             onLogout={handleLogout}
             checks={checks}
+            medidas={medidas}
+            fotos={fotos}
             onRefreshChecks={loadParticipantData}
           />
         )}
@@ -117,6 +128,8 @@ export default function App() {
           <ProgressoView
             usuario={usuario}
             medidas={medidas}
+            fotos={fotos}
+            loadingFotos={loadingFotos}
             onRefreshMedidas={loadParticipantData}
           />
         )}

@@ -8,13 +8,14 @@ import { motion, AnimatePresence } from 'motion/react';
 interface ProgressoViewProps {
   usuario: Usuario;
   medidas: Medida[];
+  fotos: FotoProgresso[];
+  loadingFotos: boolean;
   onRefreshMedidas: () => Promise<void>;
 }
 
-export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: ProgressoViewProps) {
+export default function ProgressoView({ usuario, medidas, fotos, loadingFotos, onRefreshMedidas }: ProgressoViewProps) {
   // Database photos state
-  const [fotos, setFotos] = useState<FotoProgresso[]>([]);
-  const [loadingFotos, setLoadingFotos] = useState<boolean>(true);
+  const [dataInicio, setDataInicio] = useState<string>('2026-07-06');
 
   // Toggle Forms
   const [showMedicaoForm, setShowMedicaoForm] = useState<boolean>(false);
@@ -23,6 +24,76 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
   // Forms general loading/error state
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+
+  // Helper to parse dates securely to avoid timezone shifting
+  const parseDate = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  };
+
+  const getDaysDifference = (dateStr1: string, dateStr2: string): number => {
+    if (!dateStr1 || !dateStr2) return 0;
+    const d1 = parseDate(dateStr1);
+    const d2 = parseDate(dateStr2);
+    const diffTime = d1.getTime() - d2.getTime();
+    return Math.round(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const addDays = (dateStr: string, days: number): string => {
+    const d = parseDate(dateStr);
+    d.setDate(d.getDate() + days);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isMilestoneCompleted = (dayOffset: number) => {
+    if (!dataInicio) return false;
+    const mDateStart = addDays(dataInicio, dayOffset);
+    const mDateEnd = addDays(mDateStart, 3);
+    
+    const hasMedida = medidas.some(m => m.data >= mDateStart && m.data <= mDateEnd);
+    const hasFoto = fotos.some(f => f.data >= mDateStart && f.data <= mDateEnd);
+    
+    return hasMedida && hasFoto;
+  };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const pendingMilestones = [
+    { day: 30, label: 'Dia 30', text: '📸 Chegou o Dia 30! Hora de atualizar sua foto e medidas.' },
+    { day: 60, label: 'Dia 60', text: '📸 Chegou o Dia 60! Hora de atualizar sua foto e medidas.' },
+    { day: 90, label: 'Dia 90', text: '📸 Reta final! Dia 90 — hora do registro final de evolução.' }
+  ].filter(m => {
+    const mDate = addDays(dataInicio, m.day);
+    return todayStr >= mDate && !isMilestoneCompleted(m.day);
+  });
+
+  const getMilestoneTag = (dateStr: string) => {
+    if (!dataInicio) return null;
+    const diff = getDaysDifference(dateStr, dataInicio);
+    if (diff >= 0 && diff <= 3) return 'Dia 0';
+    if (diff >= 30 && diff <= 33) return 'Dia 30';
+    if (diff >= 60 && diff <= 63) return 'Dia 60';
+    if (diff >= 90 && diff <= 93) return 'Dia 90';
+    return null;
+  };
+
+  const renderMilestoneTag = (tag: string) => {
+    if (!tag) return null;
+    let colorClasses = 'bg-slate-100 text-slate-700 border-slate-200';
+    if (tag === 'Dia 0') colorClasses = 'bg-amber-50 text-amber-700 border-amber-200';
+    if (tag === 'Dia 30') colorClasses = 'bg-blue-50 text-blue-700 border-blue-150';
+    if (tag === 'Dia 60') colorClasses = 'bg-purple-50 text-purple-700 border-purple-150';
+    if (tag === 'Dia 90') colorClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black border ${colorClasses}`}>
+        {tag}
+      </span>
+    );
+  };
 
   // New Measurement Form States
   const [dataMedicao, setDataMedicao] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -40,18 +111,40 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
   // New Photo Form States
   const [dataFoto, setDataFoto] = useState<string>(new Date().toISOString().split('T')[0]);
   const [legenda, setLegenda] = useState<string>('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [selectedFiles, setSelectedFiles] = useState<Record<string, File | null>>({
+    frente: null,
+    costas: null,
+    lado_direito: null,
+    lado_esquerdo: null
+  });
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({
+    frente: '',
+    costas: '',
+    lado_direito: '',
+    lado_esquerdo: ''
+  });
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
-  // Clean up Object URL to prevent leaks
+  // Compare angles state
+  const [selectedCompareAngle, setSelectedCompareAngle] = useState<'frente' | 'costas' | 'lado_direito' | 'lado_esquerdo'>('frente');
+
+  const anglesConfig = [
+    { key: 'frente', label: 'Frente', icon: '👤', silhouette: 'Frente' },
+    { key: 'costas', label: 'Costas', icon: '👤', silhouette: 'Costas' },
+    { key: 'lado_direito', label: 'Lado Direito', icon: '👥', silhouette: 'Lado Dir.' },
+    { key: 'lado_esquerdo', label: 'Lado Esquerdo', icon: '👥', silhouette: 'Lado Esq.' }
+  ];
+
+  // Clean up Object URLs to prevent leaks
   useEffect(() => {
     return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
+      Object.values(previewUrls).forEach(url => {
+        if (url) {
+          URL.revokeObjectURL(url as string);
+        }
+      });
     };
-  }, [previewUrl]);
+  }, [previewUrls]);
   
   // Chart Metric Selection
   const [selectedMetric, setSelectedMetric] = useState<string>('peso');
@@ -89,33 +182,17 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
     { key: 'peito', label: 'Peito (cm)' },
   ];
 
-  const loadFotos = async () => {
-    setLoadingFotos(true);
-    try {
-      const data = await api.getFotosProgresso();
-      setFotos(data);
-    } catch (err) {
-      console.error('Erro ao buscar fotos de progresso:', err);
-    } finally {
-      setLoadingFotos(false);
-    }
-  };
-
   useEffect(() => {
-    loadFotos();
+    api.getDesafioConfig().then(config => {
+      if (config && config.data_inicio) {
+        setDataInicio(config.data_inicio);
+      }
+    }).catch(err => {
+      console.error('Erro ao buscar config do desafio:', err);
+    });
   }, []);
 
-  // Drag and drop handlers
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragOver(false);
-  };
-
-  const processFile = (file: File) => {
+  const handleAngleFileChange = (angle: string, file: File) => {
     if (!file.type.startsWith('image/')) {
       setError('Por favor, envie apenas arquivos de imagem.');
       return;
@@ -130,31 +207,30 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
       return;
     }
 
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
+    if (previewUrls[angle]) {
+      URL.revokeObjectURL(previewUrls[angle]);
     }
 
-    setSelectedFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    setSelectedFiles(prev => ({ ...prev, [angle]: file }));
+    setPreviewUrls(prev => ({ ...prev, [angle]: URL.createObjectURL(file) }));
     setError('');
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
-    }
-  };
-
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
+  const getSessionCompletionStats = (dateStr: string) => {
+    const existing = fotos.filter(f => f.data === dateStr);
+    let count = 0;
+    ['frente', 'costas', 'lado_direito', 'lado_esquerdo'].forEach(angle => {
+      const hasNew = !!selectedFiles[angle];
+      const hasExisting = existing.some(f => f.angulo === angle);
+      if (hasNew || hasExisting) {
+        count++;
+      }
+    });
+    return {
+      count,
+      total: 4,
+      isComplete: count === 4
+    };
   };
 
   // Format YYYY-MM-DD to DD/MM/YYYY
@@ -177,8 +253,9 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
   // Handle Photo submit
   const handlePhotoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile) {
-      setError('A foto é obrigatória.');
+    const hasAnyNew = Object.values(selectedFiles).some(f => f !== null);
+    if (!hasAnyNew) {
+      setError('Selecione pelo menos uma nova foto para salvar.');
       return;
     }
 
@@ -186,29 +263,44 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
     setError('');
 
     try {
-      // 1. Upload to Vercel Blob
-      const uploadResult = await api.uploadFoto(selectedFile);
-      const publicUrl = uploadResult.url;
+      const angles = ['frente', 'costas', 'lado_direito', 'lado_esquerdo'];
+      for (const angle of angles) {
+        const file = selectedFiles[angle];
+        if (file) {
+          const uploadResult = await api.uploadFoto(file);
+          const publicUrl = uploadResult.url;
 
-      // 2. Save progress photo link to DB
-      await api.addFotoProgresso({
-        data: dataFoto,
-        foto_url: publicUrl,
-        legenda: legenda || undefined
-      });
+          await api.addFotoProgresso({
+            data: dataFoto,
+            foto_url: publicUrl,
+            legenda: legenda || undefined,
+            angulo: angle
+          });
+        }
+      }
 
       // Reset
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-      setSelectedFile(null);
-      setPreviewUrl('');
+      Object.values(previewUrls).forEach(url => {
+        if (url) URL.revokeObjectURL(url as string);
+      });
+      setSelectedFiles({
+        frente: null,
+        costas: null,
+        lado_direito: null,
+        lado_esquerdo: null
+      });
+      setPreviewUrls({
+        frente: '',
+        costas: '',
+        lado_direito: '',
+        lado_esquerdo: ''
+      });
       setLegenda('');
       setDataFoto(new Date().toISOString().split('T')[0]);
       setShowFotoForm(false);
-      await loadFotos();
+      await onRefreshMedidas();
     } catch (err: any) {
-      setError(err.message || 'Erro ao salvar foto de progresso.');
+      setError(err.message || 'Erro ao salvar fotos de progresso.');
     } finally {
       setLoading(false);
     }
@@ -274,8 +366,50 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
     }));
 
   const hasPhotos = fotos.length > 0;
-  const firstPhoto = hasPhotos ? fotos[0] : null;
-  const latestPhoto = hasPhotos ? fotos[fotos.length - 1] : null;
+
+  // Group photos by date
+  const getPhotosBySession = () => {
+    const sessions: Record<string, Record<string, FotoProgresso>> = {};
+    fotos.forEach(f => {
+      if (!sessions[f.data]) {
+        sessions[f.data] = {};
+      }
+      const angle = f.angulo || 'frente';
+      sessions[f.data][angle] = f;
+    });
+
+    return Object.keys(sessions)
+      .sort((a, b) => b.localeCompare(a))
+      .map(data => ({
+        data,
+        photos: sessions[data],
+        totalCount: Object.keys(sessions[data]).length
+      }));
+  };
+
+  const getFirstAndLatestSessions = () => {
+    const sessionsMap: Record<string, Record<string, FotoProgresso>> = {};
+    fotos.forEach(f => {
+      if (!sessionsMap[f.data]) {
+        sessionsMap[f.data] = {};
+      }
+      const angle = f.angulo || 'frente';
+      sessionsMap[f.data][angle] = f;
+    });
+
+    const sortedDates = Object.keys(sessionsMap).sort((a, b) => a.localeCompare(b));
+    if (sortedDates.length < 1) return null;
+    
+    const firstDate = sortedDates[0];
+    const latestDate = sortedDates[sortedDates.length - 1];
+
+    if (firstDate === latestDate) return null; // Only one session
+
+    return {
+      first: { data: firstDate, photos: sessionsMap[firstDate] },
+      latest: { data: latestDate, photos: sessionsMap[latestDate] }
+    };
+  };
 
   // Weight Loss
   const getWeightLoss = () => {
@@ -346,6 +480,38 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
           </div>
         )}
 
+        {/* Milestone Warning Banners */}
+        {pendingMilestones.length > 0 && (
+          <div className="space-y-3">
+            {pendingMilestones.map(m => (
+              <div key={m.day} className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-black text-slate-800 leading-snug">{m.text}</h4>
+                    <p className="text-[10px] text-slate-500 font-bold leading-normal mt-0.5">
+                      Atualize seu peso, medidas e foto de progresso para registrar este marco oficial do desafio.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDataMedicao(todayStr);
+                    setDataFoto(todayStr);
+                    setShowMedicaoForm(true);
+                    setShowFotoForm(true);
+                    setError('');
+                  }}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black py-2 rounded-xl transition-all shadow-sm active:scale-95"
+                >
+                  Registrar agora
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* 1. Add Photo Form */}
         <AnimatePresence>
           {showFotoForm && (
@@ -358,82 +524,114 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
               <form onSubmit={handlePhotoSubmit} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
                 <div className="flex items-center space-x-2 text-sm font-display font-bold text-slate-800 border-b border-slate-50 pb-2">
                   <Camera className={`w-5 h-5 ${colorTheme.accentText}`} />
-                  <span>Adicionar Foto de Progresso</span>
+                  <span>Adicionar Fotos de Progresso</span>
                 </div>
 
                 <div className="space-y-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Data da Foto</label>
-                    <input
-                      type="date"
-                      required
-                      value={dataFoto}
-                      onChange={e => setDataFoto(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none focus:border-slate-400 font-semibold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Legenda (Opcional)</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 30 dias de foco, jejum..."
-                      value={legenda}
-                      onChange={e => setLegenda(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none focus:border-slate-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Foto *</label>
-                    <div
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                      onClick={triggerFileInput}
-                      className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
-                        isDragOver 
-                          ? 'border-slate-500 bg-slate-50' 
-                          : selectedFile 
-                          ? 'border-emerald-200 bg-emerald-50/20' 
-                          : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Data da Foto</label>
                       <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                        accept="image/png, image/jpeg, image/jpg, image/webp"
-                        className="hidden"
+                        type="date"
+                        required
+                        value={dataFoto}
+                        onChange={e => setDataFoto(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none focus:border-slate-400 font-semibold"
                       />
-
-                      {selectedFile && previewUrl ? (
-                        <div className="flex flex-col items-center space-y-2">
-                          <img src={previewUrl} alt="Preview" className="w-24 h-32 object-cover rounded-lg shadow-sm" referrerPolicy="no-referrer" />
-                          <span className="text-xs font-bold text-emerald-600">Foto carregada! ✨</span>
-                          <button
-                            type="button"
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              if (previewUrl) {
-                                URL.revokeObjectURL(previewUrl);
-                              }
-                              setSelectedFile(null); 
-                              setPreviewUrl(''); 
-                            }}
-                            className="text-[10px] text-slate-400 hover:text-rose-500 font-bold"
-                          >
-                            Remover e escolher outra
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <Upload className="w-8 h-8 text-slate-300 mb-1" />
-                          <span className="text-xs font-bold text-slate-600">Arraste e solte ou toque para buscar</span>
-                          <span className="text-[10px] text-slate-400 mt-0.5">JPG, JPEG, PNG ou WEBP, tamanho máx 5MB</span>
-                        </>
-                      )}
                     </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Legenda (Opcional)</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 30 dias..."
+                        value={legenda}
+                        onChange={e => setLegenda(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none focus:border-slate-400 font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Completeness indicator */}
+                  {(() => {
+                    const stats = getSessionCompletionStats(dataFoto);
+                    return (
+                      <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+                        <span>Progresso da sessão:</span>
+                        <span className={stats.isComplete ? 'text-emerald-600 font-extrabold' : 'text-slate-600 font-extrabold'}>
+                          {stats.count}/4 fotos {stats.isComplete ? '✨ Completo!' : ''}
+                        </span>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 4 slots grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {anglesConfig.map(angle => {
+                      const key = angle.key;
+                      const localPreview = previewUrls[key];
+                      const existing = fotos.filter(f => f.data === dataFoto).find(f => f.angulo === key);
+
+                      return (
+                        <div key={key} className="flex flex-col space-y-1">
+                          <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                            <span>{angle.icon}</span>
+                            <span>{angle.label}</span>
+                          </span>
+
+                          <div
+                            onClick={() => document.getElementById(`file-input-${key}`)?.click()}
+                            className={`aspect-[3/4] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-all relative overflow-hidden ${
+                              localPreview
+                                ? 'border-emerald-300 bg-emerald-50/20'
+                                : existing
+                                ? 'border-blue-300 bg-blue-50/20'
+                                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                            }`}
+                          >
+                            <input
+                              type="file"
+                              id={`file-input-${key}`}
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  handleAngleFileChange(key, e.target.files[0]);
+                                }
+                              }}
+                              accept="image/png, image/jpeg, image/jpg, image/webp"
+                              className="hidden"
+                            />
+
+                            {localPreview ? (
+                              <div className="absolute inset-0 w-full h-full">
+                                <img src={localPreview} alt={angle.label} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                  <span className="text-[8px] font-black text-white bg-slate-900/80 px-2 py-1 rounded-lg">Alterar</span>
+                                </div>
+                                <div className="absolute bottom-1 right-1 bg-emerald-500 text-white text-[8px] px-1.5 py-0.5 rounded font-black shadow-sm">
+                                  Pronta
+                                </div>
+                              </div>
+                            ) : existing ? (
+                              <div className="absolute inset-0 w-full h-full">
+                                <img src={existing.foto_url} alt={angle.label} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                  <span className="text-[8px] font-black text-white bg-slate-900/80 px-2 py-1 rounded-lg">Substituir</span>
+                                </div>
+                                <div className="absolute bottom-1 right-1 bg-blue-500 text-white text-[8px] px-1.5 py-0.5 rounded font-black shadow-sm">
+                                  Já salvo
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center p-1">
+                                <span className="text-xl filter grayscale opacity-45 mb-1">{angle.icon}</span>
+                                <span className="text-[9px] font-bold text-slate-400">Silhueta {angle.silhouette}</span>
+                                <span className="text-[7px] text-slate-300 mt-0.5 font-bold">Toque para enviar</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -443,7 +641,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                   className={`w-full py-3 rounded-xl font-display font-bold text-sm text-white bg-gradient-to-tr ${colorTheme.primary} shadow-md flex items-center justify-center gap-1.5`}
                 >
                   <Check className="w-4 h-4" />
-                  <span>{loading ? 'Salvando...' : 'Salvar Foto'}</span>
+                  <span>{loading ? 'Salvando...' : 'Salvar Fotos da Sessão'}</span>
                 </button>
               </form>
             </motion.div>
@@ -626,61 +824,140 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
               <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${colorTheme.accentText}`} />
             </div>
           ) : hasPhotos ? (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* First vs Latest side-by-side comparative */}
-              {fotos.length >= 2 && (
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-2">
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                    <span>Antes &amp; Depois Oficial (Primeira x Mais Recente)</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div className="rounded-xl overflow-hidden relative aspect-[3/4] border border-slate-200 shadow-sm bg-white">
-                      <img
-                        src={firstPhoto?.foto_url}
-                        alt="Ponto de partida"
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute bottom-2 left-2 right-2 bg-slate-950/70 backdrop-blur-sm p-1 rounded-lg text-white text-[9px] font-bold text-center">
-                        Antes: {formatBrazilianDate(firstPhoto?.data || '')}
-                      </div>
+              {(() => {
+                const comp = getFirstAndLatestSessions();
+                if (!comp) return null;
+                return (
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-3">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      <span>Antes &amp; Depois Oficial (Por Ângulo)</span>
                     </div>
 
-                    <div className="rounded-xl overflow-hidden relative aspect-[3/4] border border-slate-200 shadow-sm bg-white">
-                      <img
-                        src={latestPhoto?.foto_url}
-                        alt="Mais recente"
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute bottom-2 left-2 right-2 bg-slate-950/70 backdrop-blur-sm p-1 rounded-lg text-white text-[9px] font-bold text-center">
-                        Agora: {formatBrazilianDate(latestPhoto?.data || '')}
+                    {/* Angle selector tabs */}
+                    <div className="grid grid-cols-4 gap-1 p-0.5 bg-slate-200/60 rounded-xl">
+                      {anglesConfig.map(angle => (
+                        <button
+                          key={angle.key}
+                          type="button"
+                          onClick={() => setSelectedCompareAngle(angle.key as any)}
+                          className={`py-1 text-[9px] font-black rounded-lg transition-all ${
+                            selectedCompareAngle === angle.key
+                              ? 'bg-white text-slate-800 shadow-xs'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          {angle.silhouette}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {/* Before */}
+                      <div className="rounded-xl overflow-hidden relative aspect-[3/4] border border-slate-200 shadow-sm bg-white flex items-center justify-center">
+                        {comp.first.photos[selectedCompareAngle] ? (
+                          <>
+                            <img
+                              src={comp.first.photos[selectedCompareAngle].foto_url}
+                              alt={`Inicial ${selectedCompareAngle}`}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute bottom-2 left-2 right-2 bg-slate-950/70 backdrop-blur-sm p-1 rounded-lg text-white text-[9px] font-bold text-center">
+                              Antes: {formatBrazilianDate(comp.first.data)}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="p-3 text-center flex flex-col items-center">
+                            <span className="text-2xl mb-1 filter grayscale opacity-45">👤</span>
+                            <span className="text-[8px] font-bold text-slate-400 leading-tight">Sem foto de partida</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* After */}
+                      <div className="rounded-xl overflow-hidden relative aspect-[3/4] border border-slate-200 shadow-sm bg-white flex items-center justify-center">
+                        {comp.latest.photos[selectedCompareAngle] ? (
+                          <>
+                            <img
+                              src={comp.latest.photos[selectedCompareAngle].foto_url}
+                              alt={`Atual ${selectedCompareAngle}`}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute bottom-2 left-2 right-2 bg-slate-950/70 backdrop-blur-sm p-1 rounded-lg text-white text-[9px] font-bold text-center">
+                              Hoje: {formatBrazilianDate(comp.latest.data)}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="p-3 text-center flex flex-col items-center">
+                            <span className="text-2xl mb-1 filter grayscale opacity-45">👤</span>
+                            <span className="text-[8px] font-bold text-slate-400 leading-tight">Sem foto atual</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
-              {/* Timeline Horizontal Carousel */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Timeline do Progresso</span>
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-                  {fotos.map(foto => (
-                    <div key={foto.id} className="w-24 flex-shrink-0 space-y-1 text-center">
-                      <div className="h-32 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 relative shadow-sm">
-                        <img
-                          src={foto.foto_url}
-                          alt={foto.legenda || 'Progresso'}
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="absolute top-1 right-1 bg-black/60 text-white text-[8px] px-1 rounded font-mono font-bold">
-                          {formatDateLabel(foto.data)}
+              {/* Session-by-session Timeline list */}
+              <div className="space-y-3.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Timeline de Sessões</span>
+                <div className="space-y-3">
+                  {getPhotosBySession().map(session => (
+                    <div key={session.data} className="bg-slate-50 border border-slate-100 p-3 rounded-2xl space-y-2">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="text-xs font-black text-slate-700">
+                            Sessão {formatBrazilianDate(session.data)}
+                          </span>
+                          {getMilestoneTag(session.data) && renderMilestoneTag(getMilestoneTag(session.data)!)}
                         </div>
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${
+                          session.totalCount === 4 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}>
+                          {session.totalCount}/4 fotos
+                        </span>
                       </div>
-                      {foto.legenda && (
-                        <p className="text-[9px] text-slate-400 truncate font-semibold px-1">{foto.legenda}</p>
+
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {anglesConfig.map(angle => {
+                          const f = session.photos[angle.key];
+                          return (
+                            <div key={angle.key} className="flex flex-col space-y-1">
+                              <div className="aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-white relative shadow-xs flex items-center justify-center">
+                                {f ? (
+                                  <img
+                                    src={f.foto_url}
+                                    alt={angle.label}
+                                    className="w-full h-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <div className="text-center p-1">
+                                    <span className="text-lg opacity-35 filter grayscale block mb-0.5">{angle.icon}</span>
+                                    <span className="text-[7px] font-semibold text-slate-400 leading-tight block">Pendente</span>
+                                  </div>
+                                )}
+                                <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[7px] px-1 rounded font-black font-sans uppercase">
+                                  {angle.silhouette}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {Object.values(session.photos).find(p => p.legenda)?.legenda && (
+                        <p className="text-[10px] text-slate-400 italic font-semibold px-0.5 border-t border-slate-100/55 pt-1.5">
+                          &ldquo;{Object.values(session.photos).find(p => p.legenda)?.legenda}&rdquo;
+                        </p>
                       )}
                     </div>
                   ))}
@@ -800,11 +1077,14 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2 mb-3">
-                      <Calendar className="w-4 h-4 text-slate-400" />
-                      <span className="text-xs font-extrabold text-slate-800">
-                        {formatBrazilianDate(medida.data)}
-                      </span>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-slate-400" />
+                        <span className="text-xs font-extrabold text-slate-800">
+                          {formatBrazilianDate(medida.data)}
+                        </span>
+                      </div>
+                      {getMilestoneTag(medida.data) && renderMilestoneTag(getMilestoneTag(medida.data)!)}
                     </div>
 
                     <div className="grid grid-cols-3 gap-3 text-center border-t border-slate-50 pt-3">

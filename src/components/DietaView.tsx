@@ -168,6 +168,29 @@ export default function DietaView({ usuario, onLogout }: DietaViewProps) {
         </div>
       </div>
 
+      {/* Orientações Gerais */}
+      <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-3">
+        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+          <span className="text-amber-500">💡</span> Orientações Gerais
+        </h3>
+        {usuario.nome.toLowerCase() === 'henrique' ? (
+          <ul className="text-xs text-slate-600 space-y-2 list-disc pl-4 font-medium">
+            <li>Bater meta de água todos os dias (Seu peso x 35).</li>
+            <li>Tentar introduzir caminhada até começar academia.</li>
+            <li>Liberado 1 a 2 refeições livres por semana.</li>
+            <li>Sem bebida alcoólica até começar academia.</li>
+          </ul>
+        ) : usuario.nome.toLowerCase() === 'jéssica' || usuario.nome.toLowerCase() === 'jessica' ? (
+          <ul className="text-xs text-slate-600 space-y-2 list-disc pl-4 font-medium">
+            <li>Bater meta de água todos os dias.</li>
+            <li>Atividade física no mínimo 4x na semana.</li>
+            <li>Liberado 1 a 2 refeições livres por semana.</li>
+          </ul>
+        ) : (
+          <p className="text-xs text-slate-500 italic">Nenhuma orientação cadastrada para este usuário.</p>
+        )}
+      </div>
+
       {/* Button to Add */}
       <button
         onClick={handleOpenAdd}

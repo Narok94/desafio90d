@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { CheckDiario, Usuario, ItemDieta, CheckDieta } from '../types';
-import { Flame, Trophy, Sparkles, LogOut, Check, Utensils, Settings, X, Calendar } from 'lucide-react';
+import { CheckDiario, Usuario, ItemDieta, CheckDieta, Medida, FotoProgresso } from '../types';
+import { getBadges, Badge } from '../utils/achievements';
+import { Flame, Trophy, Sparkles, LogOut, Check, Utensils, Settings, X, Calendar, Lock, Award, CalendarCheck, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface HojeViewProps {
   usuario: Usuario;
   onLogout: () => void;
   checks: CheckDiario[];
+  medidas: Medida[];
+  fotos: FotoProgresso[];
   onRefreshChecks: () => Promise<void>;
 }
 
-export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }: HojeViewProps) {
+export default function HojeView({ usuario, onLogout, checks, medidas, fotos, onRefreshChecks }: HojeViewProps) {
   const [loading, setLoading] = useState<boolean>(false);
   const [streak, setStreak] = useState<number>(0);
   const [daysRemaining, setDaysRemaining] = useState<number>(90);
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   
   // Diet state
   const [itensDieta, setItensDieta] = useState<ItemDieta[]>([]);
@@ -332,23 +336,43 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
   const todayDateObj = new Date(todayStr + 'T12:00:00');
   const isDiaLixo = challengeConfig ? todayDateObj.getDay() === challengeConfig.dia_lixo_semana : false;
 
+  // Calculate Achievement Badges
+  const startChallengeDate = challengeConfig?.data_inicio || '2026-07-06';
+  const participantBadges = getBadges(medidas, fotos, startChallengeDate);
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 pb-28">
       
       {/* Header Profile with Logout */}
       <div className="w-full bg-white border-b border-slate-100 px-6 py-4 flex justify-between items-center sticky top-0 z-40 shadow-sm">
-        <div className="flex items-center space-x-3">
-          <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${colorTheme.primary} flex items-center justify-center font-display font-extrabold text-white`}>
+        <button
+          onClick={() => setShowProfileModal(true)}
+          className="flex items-center space-x-3 text-left focus:outline-none hover:opacity-90 active:scale-[0.99] transition-all cursor-pointer group"
+          title="Ver meu perfil completo"
+        >
+          <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${colorTheme.primary} flex items-center justify-center font-display font-extrabold text-white shadow-xs group-hover:scale-105 transition-transform`}>
             {usuario.nome[0]}
           </div>
           <div>
-            <h2 className="text-sm font-display font-extrabold text-slate-900 flex items-center space-x-1">
+            <h2 className="text-sm font-display font-extrabold text-slate-900 flex items-center gap-1">
               <span>{usuario.nome}</span>
               <span>{isJessica ? '🌸' : '⚡'}</span>
+              
+              {/* Mini unlocked badges row */}
+              <div className="flex items-center gap-0.5 ml-1">
+                {participantBadges.filter(b => b.unlocked).map(b => (
+                  <span key={b.id} title={b.title} className="text-xs animate-bounce" style={{ animationDelay: b.day === 30 ? '0.2s' : b.day === 60 ? '0.4s' : '0.6s' }}>
+                    {b.emoji}
+                  </span>
+                ))}
+              </div>
             </h2>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Desafio de 90 Dias</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
+              <span>Desafio de 90 Dias</span>
+              <span className="text-blue-500 font-extrabold text-[9px] hover:underline">(Ver perfil)</span>
+            </p>
           </div>
-        </div>
+        </button>
 
         <div className="flex items-center space-x-1">
           <button
@@ -483,6 +507,47 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
               <div className="text-2xl font-display font-black text-slate-900">{daysRemaining}</div>
               <div className="text-[10px] font-bold text-slate-400 uppercase">Dias Restantes 🏁</div>
             </div>
+          </div>
+        </div>
+
+        {/* Achievements Quick Glance Card */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Award className="w-3.5 h-3.5 text-amber-500" />
+              <span>Minhas Medalhas Virtuais</span>
+            </span>
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className="text-[10px] font-extrabold text-blue-500 hover:text-blue-600 uppercase tracking-wider flex items-center gap-0.5 focus:outline-none cursor-pointer"
+            >
+              <span>Ver Perfil</span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-2">
+            {participantBadges.map(badge => (
+              <button
+                key={badge.id}
+                onClick={() => setShowProfileModal(true)}
+                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer hover:scale-[1.02] flex flex-col items-center justify-center space-y-1 ${
+                  badge.unlocked 
+                    ? `${badge.bgColor} ${badge.borderColor} ${badge.color}` 
+                    : 'bg-slate-50 border-slate-100 opacity-60'
+                }`}
+              >
+                <span className="text-2xl">{badge.unlocked ? badge.emoji : '🔒'}</span>
+                <div className="space-y-0.5">
+                  <div className={`text-[9px] font-black leading-tight ${badge.unlocked ? 'text-slate-800' : 'text-slate-400'}`}>
+                    {badge.day === 30 ? 'Dia 30' : badge.day === 60 ? 'Dia 60' : 'Dia 90'}
+                  </div>
+                  <div className={`text-[8px] font-bold leading-tight ${badge.unlocked ? 'text-amber-600' : 'text-slate-400'}`}>
+                    {badge.unlocked ? 'Desbloqueado' : 'Bloqueado'}
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -706,6 +771,171 @@ export default function HojeView({ usuario, onLogout, checks, onRefreshChecks }:
         </div>
 
       </div>
+
+      {/* Profile / Trophy Modal */}
+      <AnimatePresence>
+        {showProfileModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-end sm:items-center justify-center p-4"
+            onClick={() => setShowProfileModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100, scale: 0.95 }}
+              animate={{ y: 0, scale: 1 }}
+              exit={{ y: 100, scale: 0.95 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[85vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div className="flex items-center space-x-2">
+                  <Trophy className="w-5 h-5 text-amber-500 fill-amber-100" />
+                  <span className="font-display font-black text-sm text-slate-800 uppercase tracking-wider">
+                    Perfil &amp; Conquistas
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowProfileModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Content (Scrollable) */}
+              <div className="p-6 overflow-y-auto space-y-6">
+                {/* Participant Hero Header */}
+                <div className="flex flex-col items-center text-center space-y-3 pb-5 border-b border-slate-100">
+                  <div className="relative">
+                    {/* Outer Glow Ring */}
+                    <div className={`absolute -inset-1 rounded-full bg-gradient-to-tr ${colorTheme.primary} opacity-20 blur-sm animate-pulse`} />
+                    
+                    {/* Profile Initial */}
+                    <div className={`relative w-20 h-20 rounded-full bg-gradient-to-tr ${colorTheme.primary} flex items-center justify-center font-display font-extrabold text-white text-3xl shadow-md border-4 border-white`}>
+                      {usuario.nome[0]}
+                    </div>
+                    
+                    {/* Mini float badge */}
+                    <div className="absolute -bottom-1 -right-1 bg-white p-1 rounded-full shadow-sm border border-slate-100">
+                      <span className="text-sm">{isJessica ? '🌸' : '⚡'}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-display font-black text-slate-900">{usuario.nome}</h3>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                        {usuario.papel === 'participante' ? 'Participante Oficial' : 'Administrador'}
+                      </span>
+                      {streak >= 15 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-500 text-white shadow-xs">
+                          🔥 Consistente
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Stats Grid */}
+                <div className="grid grid-cols-2 gap-3.5 bg-slate-50 p-4 rounded-2xl border border-slate-100/80">
+                  <div className="space-y-0.5 text-center sm:text-left">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sequência Atual</div>
+                    <div className="text-lg font-display font-black text-slate-800 flex items-center justify-center sm:justify-start gap-1">
+                      <span>{streak} dias</span>
+                      <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
+                    </div>
+                  </div>
+                  <div className="space-y-0.5 text-center sm:text-left border-l border-slate-200 pl-4">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Data de Início</div>
+                    <div className="text-sm font-black text-slate-700 flex items-center justify-center sm:justify-start gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{new Date(startChallengeDate + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Detailed Badges Showcase */}
+                <div className="space-y-3.5">
+                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-slate-400" />
+                    <span>Minhas Medalhas do Desafio</span>
+                  </h4>
+
+                  <div className="space-y-3">
+                    {participantBadges.map(badge => (
+                      <div
+                        key={badge.id}
+                        className={`flex items-start gap-4 p-4 rounded-2xl border transition-all ${
+                          badge.unlocked
+                            ? `bg-white ${badge.borderColor} shadow-xs relative overflow-hidden group hover:shadow-md`
+                            : 'bg-slate-50/50 border-slate-100 opacity-70'
+                        }`}
+                      >
+                        {/* Badge Icon/Emoji Container */}
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0 transition-transform ${
+                          badge.unlocked
+                            ? `${badge.color} border group-hover:scale-110 duration-300`
+                            : 'bg-slate-100 text-slate-400 border border-dashed border-slate-200'
+                        }`}>
+                          {badge.unlocked ? (
+                            <span className="relative z-10">{badge.emoji}</span>
+                          ) : (
+                            <Lock className="w-6 h-6 text-slate-300 stroke-[2]" />
+                          )}
+                        </div>
+
+                        {/* Badge Text Details */}
+                        <div className="space-y-1 flex-1">
+                          <div className="flex justify-between items-center">
+                            <h5 className={`text-sm font-display font-black leading-tight ${
+                              badge.unlocked ? 'text-slate-800' : 'text-slate-400'
+                            }`}>
+                              {badge.title}
+                            </h5>
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${
+                              badge.unlocked
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                : 'bg-slate-200 text-slate-500'
+                            }`}>
+                              {badge.unlocked ? 'Desbloqueado' : 'Bloqueado'}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                            {badge.description}
+                          </p>
+
+                          {badge.unlocked && badge.unlockedDate && (
+                            <div className="text-[9px] text-emerald-600 font-extrabold flex items-center gap-1 pt-1">
+                              <CalendarCheck className="w-3 h-3" />
+                              <span>Conquistado em: {new Date(badge.unlockedDate + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Subtle shine effect for unlocked badges */}
+                        {badge.unlocked && (
+                          <div className="absolute top-0 right-0 w-12 h-12 bg-gradient-to-tr from-transparent via-white/5 to-white/20 pointer-events-none transform rotate-45" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer with inspirational motto */}
+              <div className="p-4 border-t border-slate-100 bg-slate-50/50 text-center text-[11px] text-slate-400 font-bold italic leading-relaxed">
+                &ldquo;A consistência é o que transforma o comum em extraordinário.&rdquo; 🌟
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

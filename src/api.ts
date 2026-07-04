@@ -155,7 +155,7 @@ export const api = {
 
   // Participant: Progress Photos
   getFotosProgresso: () => request<any[]>('/fotos-progresso'),
-  addFotoProgresso: (foto: { data: string; foto_url: string; legenda?: string }) =>
+  addFotoProgresso: (foto: { data: string; foto_url: string; legenda?: string; angulo?: string }) =>
     request<any>('/fotos-progresso', {
       method: 'POST',
       body: JSON.stringify(foto),

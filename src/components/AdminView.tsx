@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { ComparativoData, Usuario, Medida, FotoProgresso } from '../types';
+import { getBadges } from '../utils/achievements';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { Trophy, Flame, TrendingUp, Users, Award, Target, Activity, LogOut, ArrowDown, Crown, Calendar, ImageIcon, Ruler, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -15,6 +16,8 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [daysRemaining, setDaysRemaining] = useState<number>(90);
+  const [dataInicio, setDataInicio] = useState<string>('2026-07-06');
+  const [selectedAdminAngle, setSelectedAdminAngle] = useState<'frente' | 'costas' | 'lado_direito' | 'lado_esquerdo'>('frente');
 
   const fetchComparativo = async () => {
     try {
@@ -51,7 +54,135 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
 
   useEffect(() => {
     fetchComparativo();
+    api.getDesafioConfig().then(config => {
+      if (config && config.data_inicio) {
+        setDataInicio(config.data_inicio);
+      }
+    }).catch(err => {
+      console.error('Erro ao buscar config do desafio:', err);
+    });
   }, []);
+
+  const getMilestoneData = (medidas: Medida[], fotos: FotoProgresso[], startChallengeDate: string) => {
+    const milestones = [
+      { day: 0, label: 'Dia 0' },
+      { day: 30, label: 'Dia 30' },
+      { day: 60, label: 'Dia 60' },
+      { day: 90, label: 'Dia 90' }
+    ];
+
+    const parseDate = (dateStr: string) => {
+      const parts = dateStr.split('-');
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    };
+
+    const getDaysDifference = (dateStr1: string, dateStr2: string): number => {
+      if (!dateStr1 || !dateStr2) return 0;
+      const d1 = parseDate(dateStr1);
+      const d2 = parseDate(dateStr2);
+      const diffTime = d1.getTime() - d2.getTime();
+      return Math.round(diffTime / (1000 * 60 * 60 * 24));
+    };
+
+    return milestones.map(m => {
+      // Find photo in range [m.day, m.day + 3] matching the selected admin angle
+      const foto = fotos.find(f => {
+        const diff = getDaysDifference(f.data, startChallengeDate);
+        const matchAngle = (f.angulo || 'frente') === selectedAdminAngle;
+        return diff >= m.day && diff <= m.day + 3 && matchAngle;
+      });
+
+      // Find medida in range [m.day, m.day + 3]
+      const medida = medidas.find(med => {
+        const diff = getDaysDifference(med.data, startChallengeDate);
+        return diff >= m.day && diff <= m.day + 3;
+      });
+
+      return {
+        ...m,
+        foto,
+        medida
+      };
+    });
+  };
+
+  const renderMilestoneComparison = (medidas: Medida[], fotos: FotoProgresso[], startChallengeDate: string) => {
+    const milestoneData = getMilestoneData(medidas, fotos, startChallengeDate);
+
+    return (
+      <div className="space-y-3 pt-3 border-t border-slate-50">
+        <div className="flex justify-between items-center">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+            <Sparkles className="w-4 h-4 text-amber-500 fill-amber-100 animate-pulse" />
+            Evolução nos Marcos Oficiais
+          </span>
+          <span className="text-[9px] text-slate-400 font-bold uppercase">Janela de +3 dias do marco</span>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2 overflow-x-auto pb-1 scrollbar-thin">
+          {milestoneData.map(m => {
+            const hasFoto = !!m.foto;
+            const hasMedida = !!m.medida;
+
+            let tagColor = 'bg-slate-100 text-slate-700 border-slate-200';
+            if (m.label === 'Dia 0') tagColor = 'bg-amber-50 text-amber-700 border-amber-200';
+            if (m.label === 'Dia 30') tagColor = 'bg-blue-50 text-blue-700 border-blue-150';
+            if (m.label === 'Dia 60') tagColor = 'bg-purple-50 text-purple-700 border-purple-150';
+            if (m.label === 'Dia 90') tagColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
+            return (
+              <div key={m.day} className="flex flex-col space-y-2 text-center bg-slate-50/50 p-1.5 rounded-2xl border border-slate-100 min-w-[85px]">
+                {/* Header tag */}
+                <div className={`px-1 py-0.5 rounded-lg text-[9px] font-black border text-center ${tagColor}`}>
+                  {m.label}
+                </div>
+
+                {/* Photo */}
+                <div className="aspect-[3/4] rounded-xl overflow-hidden bg-slate-100 relative border border-slate-200 shadow-sm flex items-center justify-center">
+                  {hasFoto ? (
+                    <img
+                      src={m.foto?.foto_url}
+                      alt={m.label}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="p-2 text-center flex flex-col items-center justify-center">
+                      <ImageIcon className="w-4 h-4 text-slate-300 mb-1" />
+                      <span className="text-[7px] font-bold text-slate-400 leading-tight">Sem foto</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Measurements */}
+                <div className="space-y-1 text-[8px] leading-tight font-medium bg-white p-1.5 rounded-xl border border-slate-100 shadow-xs min-h-[70px] flex flex-col justify-center">
+                  {hasMedida ? (
+                    <>
+                      <div className="font-extrabold text-slate-800 text-[10px] mb-0.5">{m.medida?.peso} kg</div>
+                      {m.medida?.cintura !== null && m.medida?.cintura !== undefined && (
+                        <div className="text-slate-500">Cint: <span className="font-bold text-slate-700">{m.medida?.cintura}cm</span></div>
+                      )}
+                      {m.medida?.barriga !== null && m.medida?.barriga !== undefined && (
+                        <div className="text-slate-500">Barr: <span className="font-bold text-slate-700">{m.medida?.barriga}cm</span></div>
+                      )}
+                      {m.medida?.quadril !== null && m.medida?.quadril !== undefined && (
+                        <div className="text-slate-500">Quad: <span className="font-bold text-slate-700">{m.medida?.quadril}cm</span></div>
+                      )}
+                      {m.medida?.braco_direito !== null && m.medida?.braco_direito !== undefined && (
+                        <div className="text-slate-500">Braç: <span className="font-bold text-slate-700">{m.medida?.braco_direito}cm</span></div>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-slate-400 font-semibold block text-[7px] py-1">Sem medidas</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   // Format date for chart (DD/MM)
   const formatDateLabel = (dateStr: string) => {
@@ -226,21 +357,43 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
       );
     }
 
-    const first = fotos[0];
-    const latest = fotos[fotos.length - 1];
+    // Filter photos matching the selected angle
+    const anglePhotos = fotos.filter(f => (f.angulo || 'frente') === selectedAdminAngle);
+    
+    // Sort chronologically by date
+    const sorted = [...anglePhotos].sort((a, b) => a.data.localeCompare(b.data));
+
+    const angleLabel = selectedAdminAngle === 'frente' ? 'Frente' : selectedAdminAngle === 'costas' ? 'Costas' : selectedAdminAngle === 'lado_direito' ? 'Lado Direito' : 'Lado Esquerdo';
+
+    if (sorted.length === 0) {
+      return (
+        <div className="py-8 bg-slate-50 border border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-center">
+          <ImageIcon className="w-8 h-8 text-slate-300 stroke-[1.5]" />
+          <span className="text-xs text-slate-400 font-semibold mt-1">
+            Nenhuma foto para o ângulo {angleLabel}
+          </span>
+        </div>
+      );
+    }
+
+    const first = sorted[0];
+    const latest = sorted[sorted.length - 1];
 
     return (
       <div className="space-y-2">
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Evolução Visual (Primeira x Mais Recente)</div>
+        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+          <span>Evolução Visual ({angleLabel})</span>
+          <span className="text-amber-500 font-black uppercase">Primeira x Mais Recente</span>
+        </div>
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="rounded-2xl overflow-hidden border border-slate-200 relative aspect-[3/4] bg-slate-100 shadow-sm">
+          <div className="rounded-2xl overflow-hidden border border-slate-200 relative aspect-[3/4] bg-slate-100 shadow-sm flex items-center justify-center">
             <img src={first.foto_url} alt="Antes" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             <div className="absolute bottom-1.5 left-1.5 right-1.5 bg-black/60 px-1.5 py-0.5 rounded text-white text-[9px] font-bold text-center">
               Início: {formatDateLabel(first.data)}
             </div>
           </div>
-          {fotos.length >= 2 ? (
-            <div className="rounded-2xl overflow-hidden border border-slate-200 relative aspect-[3/4] bg-slate-100 shadow-sm">
+          {sorted.length >= 2 ? (
+            <div className="rounded-2xl overflow-hidden border border-slate-200 relative aspect-[3/4] bg-slate-100 shadow-sm flex items-center justify-center">
               <img src={latest.foto_url} alt="Depois" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               <div className="absolute bottom-1.5 left-1.5 right-1.5 bg-black/60 px-1.5 py-0.5 rounded text-white text-[9px] font-bold text-center">
                 Atual: {formatDateLabel(latest.data)}
@@ -356,7 +509,16 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
                 <div className="flex items-center space-x-3">
                   <span className="text-xl">🌸</span>
                   <div>
-                    <h4 className="font-display font-extrabold text-slate-800 text-sm">Jéssica</h4>
+                    <h4 className="font-display font-extrabold text-slate-800 text-sm flex items-center gap-1">
+                      <span>Jéssica</span>
+                      {getBadges(jessicaData.medidasCompleto, jessicaData.fotosProgresso, dataInicio)
+                        .filter(b => b.unlocked)
+                        .map(b => (
+                          <span key={b.id} title={b.title} className="text-xs">
+                            {b.emoji}
+                          </span>
+                        ))}
+                    </h4>
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Participante</span>
                   </div>
                 </div>
@@ -373,7 +535,16 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
                 <div className="flex items-center space-x-3">
                   <span className="text-xl">⚡</span>
                   <div>
-                    <h4 className="font-display font-extrabold text-slate-800 text-sm">Henrique</h4>
+                    <h4 className="font-display font-extrabold text-slate-800 text-sm flex items-center gap-1">
+                      <span>Henrique</span>
+                      {getBadges(henriqueData.medidasCompleto, henriqueData.fotosProgresso, dataInicio)
+                        .filter(b => b.unlocked)
+                        .map(b => (
+                          <span key={b.id} title={b.title} className="text-xs">
+                            {b.emoji}
+                          </span>
+                        ))}
+                    </h4>
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Participante</span>
                   </div>
                 </div>
@@ -388,10 +559,35 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
 
         {/* Detailed Competitors Analysis Section (Photos + Body Measurements) */}
         <div className="space-y-5">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 px-1">
-            <Users className="w-4 h-4" />
-            Evolução Corporal Detalhada
-          </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Users className="w-4 h-4" />
+              Evolução Corporal Detalhada
+            </h3>
+            
+            {/* Unified Admin Angle Control */}
+            <div className="bg-slate-100 p-0.5 rounded-xl flex border border-slate-200 shadow-inner max-w-xs w-full">
+              {[
+                { key: 'frente', label: 'Frente 👤' },
+                { key: 'costas', label: 'Costas 👤' },
+                { key: 'lado_direito', label: 'Lado Dir.' },
+                { key: 'lado_esquerdo', label: 'Lado Esq.' }
+              ].map(angle => (
+                <button
+                  key={angle.key}
+                  type="button"
+                  onClick={() => setSelectedAdminAngle(angle.key as any)}
+                  className={`flex-1 py-1 text-center text-[10px] font-black rounded-lg transition-all ${
+                    selectedAdminAngle === angle.key
+                      ? 'bg-white text-slate-800 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {angle.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Jessica Detailed Card */}
           {jessicaData && (
@@ -401,7 +597,24 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
                   <span className="text-2xl">🌸</span>
                   <div>
                     <h4 className="font-display font-extrabold text-slate-900 text-base">Jéssica</h4>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Metas &amp; Medidas</p>
+                    {/* Unlocked Achievements Medals */}
+                    <div className="flex items-center gap-1 mt-1">
+                      {getBadges(jessicaData.medidasCompleto, jessicaData.fotosProgresso, dataInicio)
+                        .filter(b => b.unlocked)
+                        .map(b => (
+                          <span
+                            key={b.id}
+                            title={`${b.title}: ${b.description}`}
+                            className="text-xs bg-slate-50 p-0.5 px-1 rounded-md border border-slate-100 flex items-center gap-0.5 cursor-help"
+                          >
+                            <span>{b.emoji}</span>
+                            <span className="text-[8px] font-black uppercase text-slate-500">{b.day === 30 ? '30D' : b.day === 60 ? '60D' : '90D'}</span>
+                          </span>
+                        ))}
+                      {getBadges(jessicaData.medidasCompleto, jessicaData.fotosProgresso, dataInicio).filter(b => b.unlocked).length === 0 && (
+                        <span className="text-[8px] text-slate-400 font-bold uppercase italic">Nenhuma medalha ainda</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="bg-rose-50 text-rose-500 font-extrabold text-xs px-3 py-1 rounded-full border border-rose-100">
@@ -411,6 +624,9 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
 
               {/* Side-by-side Photos */}
               {renderSideBySidePhotos(jessicaData.fotosProgresso)}
+
+              {/* Milestone Comparison (Dia 0, 30, 60, 90) */}
+              {renderMilestoneComparison(jessicaData.medidasCompleto, jessicaData.fotosProgresso, dataInicio)}
 
               {/* Detailed Measurements Table */}
               <div className="space-y-2 pt-2 border-t border-slate-50">
@@ -428,7 +644,24 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
                   <span className="text-2xl">⚡</span>
                   <div>
                     <h4 className="font-display font-extrabold text-slate-900 text-base">Henrique</h4>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Metas &amp; Medidas</p>
+                    {/* Unlocked Achievements Medals */}
+                    <div className="flex items-center gap-1 mt-1">
+                      {getBadges(henriqueData.medidasCompleto, henriqueData.fotosProgresso, dataInicio)
+                        .filter(b => b.unlocked)
+                        .map(b => (
+                          <span
+                            key={b.id}
+                            title={`${b.title}: ${b.description}`}
+                            className="text-xs bg-slate-50 p-0.5 px-1 rounded-md border border-slate-100 flex items-center gap-0.5 cursor-help"
+                          >
+                            <span>{b.emoji}</span>
+                            <span className="text-[8px] font-black uppercase text-slate-500">{b.day === 30 ? '30D' : b.day === 60 ? '60D' : '90D'}</span>
+                          </span>
+                        ))}
+                      {getBadges(henriqueData.medidasCompleto, henriqueData.fotosProgresso, dataInicio).filter(b => b.unlocked).length === 0 && (
+                        <span className="text-[8px] text-slate-400 font-bold uppercase italic">Nenhuma medalha ainda</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="bg-emerald-50 text-emerald-600 font-extrabold text-xs px-3 py-1 rounded-full border border-emerald-100">
@@ -438,6 +671,9 @@ export default function AdminView({ usuario, onLogout }: AdminViewProps) {
 
               {/* Side-by-side Photos */}
               {renderSideBySidePhotos(henriqueData.fotosProgresso)}
+
+              {/* Milestone Comparison (Dia 0, 30, 60, 90) */}
+              {renderMilestoneComparison(henriqueData.medidasCompleto, henriqueData.fotosProgresso, dataInicio)}
 
               {/* Detailed Measurements Table */}
               <div className="space-y-2 pt-2 border-t border-slate-50">

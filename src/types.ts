@@ -47,6 +47,7 @@ export interface FotoProgresso {
   data: string; // YYYY-MM-DD
   foto_url: string;
   legenda?: string;
+  angulo?: 'frente' | 'costas' | 'lado_direito' | 'lado_esquerdo';
 }
 
 export interface Medida {

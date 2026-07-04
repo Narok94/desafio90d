@@ -37,7 +37,7 @@ export interface DB {
 
   // Photos
   getFotosProgresso(usuarioId: number): Promise<any[]>;
-  addFotoProgresso(usuarioId: number, data: string, fotoUrl: string, legenda?: string): Promise<any>;
+  addFotoProgresso(usuarioId: number, data: string, fotoUrl: string, legenda?: string, angulo?: string): Promise<any>;
   getTodasFotosProgresso(): Promise<any[]>;
 
   // Challenge Config
@@ -138,6 +138,31 @@ class PostgresDB implements DB {
           foto_url TEXT NOT NULL,
           legenda TEXT
         );
+      `);
+
+      // Add angulo column to fotos_progresso
+      await client.query(`
+        ALTER TABLE fotos_progresso ADD COLUMN IF NOT EXISTS angulo VARCHAR(20);
+      `);
+
+      // Backfill existing rows with null/empty angulo
+      const existingPhotos = await client.query(`SELECT id, usuario_id, data FROM fotos_progresso WHERE angulo IS NULL ORDER BY id`);
+      const counts: Record<string, number> = {};
+      const angles: ('frente' | 'costas' | 'lado_direito' | 'lado_esquerdo')[] = ['frente', 'costas', 'lado_direito', 'lado_esquerdo'];
+      for (const row of existingPhotos.rows) {
+        const key = `${row.usuario_id}_${row.data}`;
+        const index = counts[key] || 0;
+        const assignedAngle = angles[index % 4];
+        counts[key] = index + 1;
+        await client.query(`UPDATE fotos_progresso SET angulo = $1 WHERE id = $2`, [assignedAngle, row.id]);
+      }
+
+      // Add unique constraint safely if it doesn't exist
+      await client.query(`
+        ALTER TABLE fotos_progresso DROP CONSTRAINT IF EXISTS unique_usuario_data_angulo;
+      `);
+      await client.query(`
+        ALTER TABLE fotos_progresso ADD CONSTRAINT unique_usuario_data_angulo UNIQUE (usuario_id, data, angulo);
       `);
 
       // Create itens_dieta table
@@ -449,12 +474,15 @@ class PostgresDB implements DB {
     return rows;
   }
 
-  async addFotoProgresso(usuarioId: number, data: string, fotoUrl: string, legenda?: string): Promise<any> {
+  async addFotoProgresso(usuarioId: number, data: string, fotoUrl: string, legenda?: string, angulo?: string): Promise<any> {
+    const angleVal = angulo || 'frente';
     const { rows } = await this.pool.query(
-      `INSERT INTO fotos_progresso (usuario_id, data, foto_url, legenda)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO fotos_progresso (usuario_id, data, foto_url, legenda, angulo)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (usuario_id, data, angulo)
+       DO UPDATE SET foto_url = EXCLUDED.foto_url, legenda = EXCLUDED.legenda
        RETURNING *`,
-      [usuarioId, data, fotoUrl, legenda || null]
+      [usuarioId, data, fotoUrl, legenda || null, angleVal]
     );
     return rows[0];
   }

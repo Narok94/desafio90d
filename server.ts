@@ -426,13 +426,13 @@ app.get('/api/fotos-progresso', authenticateToken, async (req: any, res) => {
 
 // Add self progress photo
 app.post('/api/fotos-progresso', authenticateToken, async (req: any, res) => {
-  const { data, foto_url, legenda } = req.body;
+  const { data, foto_url, legenda, angulo } = req.body;
   if (!data || !foto_url) {
     return res.status(400).json({ error: 'Data e foto_url são obrigatórios' });
   }
 
   try {
-    const saved = await db.addFotoProgresso(req.user.id, data, foto_url, legenda);
+    const saved = await db.addFotoProgresso(req.user.id, data, foto_url, legenda, angulo);
     res.json(saved);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao salvar foto de progresso' });
