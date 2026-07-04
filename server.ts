@@ -4,8 +4,7 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import multer from 'multer';
 import { put } from '@vercel/blob';
-import { createServer as createViteServer } from 'vite';
-import { db, hashPin } from './src/db';
+import { db, hashPin } from './src/db.js';
 
 dotenv.config();
 
@@ -543,6 +542,7 @@ app.get('/api/admin/comparativo', authenticateToken, requireAdmin, async (req, r
 
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   const startServer = async () => {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
