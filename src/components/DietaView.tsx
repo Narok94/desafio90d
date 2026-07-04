@@ -210,7 +210,7 @@ export default function DietaView({ usuario, onLogout }: DietaViewProps) {
                     placeholder="Ex: Café da manhã, Almoço..."
                     value={nomeRefeicao}
                     onChange={(e) => setNomeRefeicao(e.target.value)}
-                    className={`w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:border-transparent ${accentRing}`}
+                    className={`w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-base font-semibold focus:outline-none focus:ring-2 focus:border-transparent ${accentRing}`}
                   />
                 </div>
 
@@ -223,7 +223,7 @@ export default function DietaView({ usuario, onLogout }: DietaViewProps) {
                     placeholder="Ex: 3 ovos mexidos, 1 banana, café sem açúcar..."
                     value={descricao}
                     onChange={(e) => setDescricao(e.target.value)}
-                    className={`w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:border-transparent ${accentRing}`}
+                    className={`w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-base font-semibold focus:outline-none focus:ring-2 focus:border-transparent ${accentRing}`}
                   />
                 </div>
 

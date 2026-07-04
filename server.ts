@@ -526,28 +526,34 @@ app.get('/api/admin/comparativo', authenticateToken, requireAdmin, async (req, r
   }
 });
 
-// Setup development & production asset serving
-async function startServer() {
-  // Initialize Database schemas and seed data
-  await db.initialize();
 
-  if (process.env.NODE_ENV !== 'production') {
+// Initialize Database schemas and seed data
+const dbInitPromise = db.initialize().catch(console.error);
+
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  const startServer = async () => {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Desafio 90] Server running on http://localhost:${PORT}`);
     });
-  }
+  };
+  startServer();
+} else if (!process.env.VERCEL) {
+  const distPath = path.join(process.cwd(), 'dist');
+  app.use(express.static(distPath));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Desafio 90] Server running on http://localhost:${PORT}`);
   });
 }
 
-startServer();
+export default app;
+

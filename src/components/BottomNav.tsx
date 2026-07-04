@@ -24,7 +24,7 @@ export default function BottomNav({ activeTab, onChangeTab, accentColor }: Botto
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-50/80 backdrop-blur-md border-t border-slate-100 z-50 flex justify-center">
+    <div className="fixed bottom-0 left-0 right-0 bg-slate-50/80 backdrop-blur-md border-t border-slate-100 z-50 flex justify-center pb-[calc(1rem+env(safe-area-inset-bottom))] px-4 pt-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-slate-100/50 flex justify-around p-2 relative">
         {tabItems.map(item => {
           const isActive = activeTab === item.id;

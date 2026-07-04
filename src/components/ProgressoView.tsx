@@ -369,7 +369,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       required
                       value={dataFoto}
                       onChange={e => setDataFoto(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-slate-400 font-semibold"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none focus:border-slate-400 font-semibold"
                     />
                   </div>
 
@@ -380,7 +380,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Ex: 30 dias de foco, jejum..."
                       value={legenda}
                       onChange={e => setLegenda(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-slate-400"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none focus:border-slate-400"
                     />
                   </div>
 
@@ -473,7 +473,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       required
                       value={dataMedicao}
                       onChange={e => setDataMedicao(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-slate-400 font-semibold"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none focus:border-slate-400 font-semibold"
                     />
                   </div>
 
@@ -486,7 +486,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Ex: 72.50"
                       value={peso}
                       onChange={e => setPeso(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-slate-400 font-semibold"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none focus:border-slate-400 font-semibold"
                     />
                   </div>
 
@@ -498,7 +498,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Opcional"
                       value={peito}
                       onChange={e => setPeito(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none"
                     />
                   </div>
 
@@ -510,7 +510,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Opcional"
                       value={bracoDireito}
                       onChange={e => setBracoDireito(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none"
                     />
                   </div>
 
@@ -522,7 +522,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Opcional"
                       value={bracoEsquerdo}
                       onChange={e => setBracoEsquerdo(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none"
                     />
                   </div>
 
@@ -534,7 +534,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Opcional"
                       value={cintura}
                       onChange={e => setCintura(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none"
                     />
                   </div>
 
@@ -546,7 +546,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Opcional"
                       value={barriga}
                       onChange={e => setBarriga(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none"
                     />
                   </div>
 
@@ -558,7 +558,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Opcional"
                       value={quadril}
                       onChange={e => setQuadril(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none"
                     />
                   </div>
 
@@ -570,7 +570,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Opcional"
                       value={pernaDireita}
                       onChange={e => setPernaDireita(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none"
                     />
                   </div>
 
@@ -582,7 +582,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Opcional"
                       value={pernaEsquerda}
                       onChange={e => setPernaEsquerda(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none"
                     />
                   </div>
 
@@ -593,7 +593,7 @@ export default function ProgressoView({ usuario, medidas, onRefreshMedidas }: Pr
                       placeholder="Ex: Sentindo menos inchado(a)..."
                       value={observacao}
                       onChange={e => setObservacao(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-base focus:outline-none"
                     />
                   </div>
                 </div>

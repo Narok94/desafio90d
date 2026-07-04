@@ -96,7 +96,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 text-slate-800">
       
       {/* Tab Switcher Panel */}
-      <main className="w-full">
+      <main className="w-full pb-[calc(100px+env(safe-area-inset-bottom))] pt-[env(safe-area-inset-top)]">
         {activeTab === 'hoje' && (
           <HojeView
             usuario={usuario}
