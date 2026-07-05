@@ -8,6 +8,7 @@ import ProgressoView from './components/ProgressoView';
 import HistoricoView from './components/HistoricoView';
 import AdminView from './components/AdminView';
 import BottomNav, { TabType } from './components/BottomNav';
+import ChangePinPrompt from './components/ChangePinPrompt';
 
 export default function App() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
@@ -17,12 +18,16 @@ export default function App() {
   const [fotos, setFotos] = useState<FotoProgresso[]>([]);
   const [loadingFotos, setLoadingFotos] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
+  const [showPinPrompt, setShowPinPrompt] = useState<boolean>(false);
 
   // Load session on startup
   useEffect(() => {
     const saved = getSavedUsuario();
     if (saved) {
       setUsuario(saved);
+      if (saved.senha_alterada === false) {
+        setShowPinPrompt(true);
+      }
     }
     setLoading(false);
 
@@ -69,6 +74,9 @@ export default function App() {
   const handleLoginSuccess = (user: Usuario) => {
     setUsuario(user);
     setActiveTab('hoje');
+    if (user.senha_alterada === false) {
+      setShowPinPrompt(true);
+    }
   };
 
   const handleLogout = () => {
@@ -97,12 +105,30 @@ export default function App() {
 
   // 2. If Administrator, show the Admin Dashboard view
   if (usuario.papel === 'admin') {
-    return <AdminView usuario={usuario} onLogout={handleLogout} />;
+    return (
+      <>
+        <AdminView usuario={usuario} onLogout={handleLogout} />
+        {showPinPrompt && (
+          <ChangePinPrompt
+            usuario={usuario}
+            onSuccess={() => setShowPinPrompt(false)}
+            onSkip={() => setShowPinPrompt(false)}
+          />
+        )}
+      </>
+    );
   }
 
   // 3. If Participant, show the active Tab with the Bottom Navigation
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
+      {showPinPrompt && (
+        <ChangePinPrompt
+          usuario={usuario}
+          onSuccess={() => setShowPinPrompt(false)}
+          onSkip={() => setShowPinPrompt(false)}
+        />
+      )}
       
       {/* Tab Switcher Panel */}
       <main className="w-full pb-[calc(100px+env(safe-area-inset-bottom))] pt-[env(safe-area-inset-top)]">

@@ -5,6 +5,7 @@ export interface Usuario {
   nome: string;
   papel: PapelUsuario;
   cor_identidade: string; // e.g., 'coral' (Jéssica) or 'green' (Henrique)
+  senha_alterada?: boolean;
 }
 
 export interface CheckDiario {

@@ -153,11 +153,32 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id,
         nome: user.nome,
         papel: user.papel,
-        cor_identidade: user.cor_identidade
+        cor_identidade: user.cor_identidade,
+        senha_alterada: user.senha_alterada
       }
     });
   } catch (err) {
     res.status(500).json({ error: 'Erro no servidor durante login' });
+  }
+});
+
+// Change PIN
+app.post('/api/auth/change-pin', authenticateToken, async (req: any, res) => {
+  const { newPin } = req.body;
+  if (!newPin || newPin.length !== 4) {
+    return res.status(400).json({ error: 'Novo PIN inválido. Deve ter 4 dígitos.' });
+  }
+  
+  try {
+    const user = await db.getUsuarioById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    
+    await db.changePin(req.user.id, newPin);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao alterar o PIN' });
   }
 });
 
@@ -172,7 +193,8 @@ app.get('/api/usuario/me', authenticateToken, async (req: any, res) => {
       id: user.id,
       nome: user.nome,
       papel: user.papel,
-      cor_identidade: user.cor_identidade
+      cor_identidade: user.cor_identidade,
+      senha_alterada: user.senha_alterada
     });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao validar sessão' });

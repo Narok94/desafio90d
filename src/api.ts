@@ -71,6 +71,12 @@ export const api = {
       body: JSON.stringify({ nome, pin }),
     }),
 
+  changePin: (newPin: string) =>
+    request<{ success: boolean }>('/auth/change-pin', {
+      method: 'POST',
+      body: JSON.stringify({ newPin }),
+    }),
+
   // Validate Token / Fetch current user profile
   getMe: () => request<Usuario>('/usuario/me'),
 

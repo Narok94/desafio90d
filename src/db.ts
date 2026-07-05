@@ -18,6 +18,7 @@ export interface DB {
   getUsuarioByNome(nome: string): Promise<any>;
   getUsuarioById(id: number): Promise<any>;
   getTodosUsuarios(): Promise<any[]>;
+  changePin(usuarioId: number, newPin: string): Promise<void>;
   getCheckDiario(usuarioId: number, data: string): Promise<any>;
   saveCheckDiario(usuarioId: number, data: string, checks: { treino: boolean; zero_doce: boolean; zero_besteira: boolean; agua: boolean; dieta?: boolean }): Promise<any>;
   getChecksDiarios(usuarioId: number): Promise<any[]>;
@@ -255,6 +256,11 @@ class PostgresDB implements DB {
   async getTodosUsuarios(): Promise<any[]> {
     const { rows } = await this.pool.query('SELECT * FROM usuarios ORDER BY id ASC');
     return rows;
+  }
+
+  async changePin(usuarioId: number, newPin: string): Promise<void> {
+    const hash = hashPin(newPin);
+    await this.pool.query('UPDATE usuarios SET pin_hash = $1, senha_alterada = TRUE WHERE id = $2', [hash, usuarioId]);
   }
 
   async getCheckDiario(usuarioId: number, data: string): Promise<any> {

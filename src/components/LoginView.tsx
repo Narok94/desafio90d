@@ -112,11 +112,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         {/* Title */}
         <div className="flex flex-col items-center mb-8 relative z-10">
-          <div className="w-16 h-16 bg-gradient-to-tr from-orange-500 to-rose-500 rounded-2xl flex items-center justify-center shadow-md mb-3 transform rotate-3 hover:rotate-12 transition-transform">
-            <Flame className="w-9 h-9 text-white fill-white" />
+          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl flex items-center justify-center shadow-md mb-4 bg-white border border-slate-100 overflow-hidden transform transition-transform hover:scale-105">
+            <img src="/icons/icon-512.png" alt="Desafio 90 Logo" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-display font-extrabold text-slate-900 tracking-tight text-center">
-            Desafio <span className="text-orange-500">90</span>
+            Desafio <span className="bg-gradient-to-tr from-lime-500 to-rose-500 bg-clip-text text-transparent">90</span>
           </h1>
           <p className="text-sm text-slate-500 font-medium mt-1">90 dias focados em evolução 💪</p>
         </div>
