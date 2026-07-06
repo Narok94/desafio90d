@@ -9,13 +9,35 @@ import { db, hashPin } from './src/db.js';
 dotenv.config();
 
 const app = express();
-const dbInitPromise = db.initialize();
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'desafio90-super-secret-key-2026';
 
+let isDbInitialized = false;
+let dbInitPromise: Promise<void> | null = null;
+
+async function getDbConnection() {
+  if (isDbInitialized) return;
+  if (!dbInitPromise) {
+    dbInitPromise = db.initialize()
+      .then(() => {
+        isDbInitialized = true;
+      })
+      .catch((err) => {
+        dbInitPromise = null; // reset to allow retry on next request
+        throw err;
+      });
+  }
+  await dbInitPromise;
+}
+
+// Trigger initial connection in background
+getDbConnection().catch(err => {
+  console.error("Initial background DB connection failed:", err);
+});
+
 app.use(async (req, res, next) => {
   try {
-    await dbInitPromise;
+    await getDbConnection();
     next();
   } catch (err) {
     console.error("DB Init error:", err);
