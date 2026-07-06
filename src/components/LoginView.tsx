@@ -113,7 +113,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         {/* Title */}
         <div className="flex flex-col items-center mb-8 relative z-10">
           <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl flex items-center justify-center shadow-md mb-4 bg-white border border-slate-100 overflow-hidden transform transition-transform hover:scale-105">
-            <img src="/icons/icon-512.png" alt="Desafio 90 Logo" className="w-full h-full object-cover" />
+            <img src="/logo.svg" alt="Desafio 90 Logo" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-3xl font-display font-extrabold text-slate-900 tracking-tight text-center">
             Desafio <span className="bg-gradient-to-tr from-lime-500 to-rose-500 bg-clip-text text-transparent">90</span>
