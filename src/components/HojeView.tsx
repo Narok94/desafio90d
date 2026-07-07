@@ -50,12 +50,13 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
   }
 
   const todayStr = getLocalDateString();
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
-  const loadDietaData = async () => {
+  const loadDietaData = async (dateStr: string) => {
     try {
       const [items, currentChecks] = await Promise.all([
         api.getItensDieta(),
-        api.getChecksDieta(todayStr)
+        api.getChecksDieta(dateStr)
       ]);
       setItensDieta(items);
       setChecksDieta(currentChecks);
@@ -84,7 +85,7 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
 
   useEffect(() => {
     // 1. Find today's check
-    const currentToday = checks.find(c => c.data === todayStr);
+    const currentToday = checks.find(c => c.data === selectedDate);
     if (currentToday) {
       setTodayCheck({
         data: currentToday.data,
@@ -96,7 +97,7 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
       });
     } else {
       setTodayCheck({
-        data: todayStr,
+        data: selectedDate,
         treino: false,
         dieta: false,
         zero_doce: false,
@@ -122,8 +123,8 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
     setStreak(calculateCurrentStreak(checks));
     
     // 4. Load diet checklist
-    loadDietaData();
-  }, [checks, todayStr, challengeConfig]);
+    loadDietaData(selectedDate);
+  }, [checks, selectedDate, todayStr, challengeConfig]);
 
   function calculateCurrentStreak(list: CheckDiario[]): number {
     if (!list || list.length === 0) return 0;
@@ -179,7 +180,7 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
     setTodayCheck(updatedCheck);
 
     try {
-      await api.saveCheck(todayStr, updatedCheck);
+      await api.saveCheck(selectedDate, updatedCheck);
       await onRefreshChecks();
     } catch (err) {
       // Revert if error
@@ -196,20 +197,20 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
     // Optimistic Update
     const updatedChecks = isChecked
       ? checksDieta.filter(c => c.item_dieta_id !== itemId)
-      : [...checksDieta, { id: 0, usuario_id: usuario.id, item_dieta_id: itemId, data: todayStr, cumprido: true, e_refeicao_livre: false }];
+      : [...checksDieta, { id: 0, usuario_id: usuario.id, item_dieta_id: itemId, data: selectedDate, cumprido: true, e_refeicao_livre: false }];
     
     setChecksDieta(updatedChecks);
 
     try {
-      await api.saveChecksDieta(todayStr, [
+      await api.saveChecksDieta(selectedDate, [
         { item_dieta_id: itemId, cumprido: !isChecked, e_refeicao_livre: false }
       ]);
-      const currentChecks = await api.getChecksDieta(todayStr);
+      const currentChecks = await api.getChecksDieta(selectedDate);
       setChecksDieta(currentChecks);
       await onRefreshChecks(); // Refresh comparison stats
     } catch (err) {
       console.error('Erro ao salvar check da dieta:', err);
-      loadDietaData();
+      loadDietaData(selectedDate);
     }
   };
 
@@ -230,15 +231,15 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
     setChecksDieta(updatedChecks);
 
     try {
-      await api.saveChecksDieta(todayStr, [
+      await api.saveChecksDieta(selectedDate, [
         { item_dieta_id: itemId, cumprido: true, e_refeicao_livre: !wasFree }
       ]);
-      const currentChecks = await api.getChecksDieta(todayStr);
+      const currentChecks = await api.getChecksDieta(selectedDate);
       setChecksDieta(currentChecks);
       await onRefreshChecks();
     } catch (err) {
       console.error('Erro ao salvar refeição livre:', err);
-      loadDietaData();
+      loadDietaData(selectedDate);
     }
   };
 
@@ -273,33 +274,68 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
   // A truly Perfect Legendary Day is when all habits are checked AND (either there is no diet plan or all diet meals are checked)
   const isPerfectDay = completedCount === 5 && (totalDietMeals === 0 || completedDietMeals === totalDietMeals);
 
+  const handlePrevDay = () => {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(getLocalDateString(d));
+  };
+
+  const handleNextDay = () => {
+    if (selectedDate === todayStr) return;
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    setSelectedDate(getLocalDateString(d));
+  };
+
+  const getFormattedSelectedDate = () => {
+    if (selectedDate === todayStr) {
+      return 'Hoje';
+    }
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = getLocalDateString(yesterday);
+    if (selectedDate === yesterdayStr) {
+      return 'Ontem';
+    }
+    
+    // Parse selectedDate
+    const dateParts = selectedDate.split('-');
+    if (dateParts.length === 3) {
+      const d = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), 12, 0, 0);
+      return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })
+        .replace(/^\w/, (c) => c.toUpperCase()); // Capitalize first letter
+    }
+    return selectedDate;
+  };
+
   // Gamified message builder
   const getMotivationalMessage = () => {
     const totalPossible = 5 + totalDietMeals;
     const currentCompleted = completedCount + completedDietMeals;
+    const isTodaySelected = selectedDate === todayStr;
 
     if (currentCompleted === 0) {
       return {
-        text: 'Bora começar o dia? Cada pequeno passo conta! 🏁',
-        sub: 'Toque nos cards para marcar suas conquistas de hoje.',
+        text: isTodaySelected ? 'Bora começar o dia? Cada pequeno passo conta! 🏁' : 'Nenhuma atividade registrada para este dia. 🎯',
+        sub: isTodaySelected ? 'Toque nos cards para marcar suas conquistas de hoje.' : 'Você pode marcar seus hábitos tocando nos cards abaixo.',
         color: 'text-slate-500 bg-slate-100'
       };
     } else if (currentCompleted < Math.floor(totalPossible / 2)) {
       return {
-        text: 'Bom começo! Passo a passo você chega lá... 💪',
+        text: isTodaySelected ? 'Bom começo! Passo a passo você chega lá... 💪' : 'Progresso iniciado para este dia! 💪',
         sub: 'Sua consistência dita os resultados de 90 dias.',
         color: 'text-amber-600 bg-amber-50 border-amber-100'
       };
     } else if (currentCompleted < totalPossible) {
       return {
-        text: 'Você tá voando no desafio de hoje! Quase tudo pronto! ⚡',
+        text: isTodaySelected ? 'Você tá voando no desafio de hoje! Quase tudo pronto! ⚡' : 'Quase tudo pronto para este dia! ⚡',
         sub: 'Só mais um pouco para fechar com chave de ouro.',
         color: 'text-indigo-600 bg-indigo-50 border-indigo-100'
       };
     } else {
       return {
         text: 'DIÁRIO LENDÁRIO CONQUISTADO! 🔥👑',
-        sub: 'Você alcançou 100% de consistência hoje! Orgulho total!',
+        sub: isTodaySelected ? 'Você alcançou 100% de consistência hoje! Orgulho total!' : 'Você alcançou 100% de consistência neste dia! Orgulho total!',
         color: 'text-emerald-700 bg-emerald-50 border-emerald-100'
       };
     }
@@ -332,8 +368,8 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
     { key: 'agua' as const, label: 'Água (3L+)', emoji: '💧', description: 'Hidratação batida', activeBg: 'bg-blue-500' },
   ];
 
-  // Determine if today is Dia do Lixo
-  const todayDateObj = new Date(todayStr + 'T12:00:00');
+  // Determine if selected date is Dia do Lixo
+  const todayDateObj = new Date(selectedDate + 'T12:00:00');
   const isDiaLixo = challengeConfig ? todayDateObj.getDay() === challengeConfig.dia_lixo_semana : false;
 
   // Calculate Achievement Badges
@@ -551,10 +587,58 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
           </div>
         </div>
 
+        {/* Seletor de Dia / Date Picker */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-3 shadow-sm flex items-center justify-between">
+          <button
+            onClick={handlePrevDay}
+            className="p-2 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer text-slate-500 active:scale-95 transition-transform"
+            title="Dia anterior"
+          >
+            <ChevronRight className="w-5 h-5 transform rotate-180" />
+          </button>
+
+          <div className="relative flex items-center justify-center space-x-2 cursor-pointer group hover:opacity-80 transition-opacity">
+            <Calendar className={`w-4 h-4 ${colorTheme.accentText}`} />
+            <span className="text-sm font-display font-black text-slate-800">
+              {getFormattedSelectedDate()}
+            </span>
+            <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-1.5 py-0.5 rounded-md">
+              {selectedDate.split('-').slice(1).reverse().join('/')}
+            </span>
+            <input
+              type="date"
+              max={todayStr}
+              value={selectedDate}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setSelectedDate(e.target.value);
+                }
+              }}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              title="Selecione um dia específico"
+            />
+          </div>
+
+          <button
+            onClick={handleNextDay}
+            disabled={selectedDate === todayStr}
+            className={`p-2 rounded-xl transition-colors ${
+              selectedDate === todayStr
+                ? 'opacity-20 cursor-not-allowed text-slate-300'
+                : 'hover:bg-slate-50 cursor-pointer text-slate-500 active:scale-95 transition-transform'
+            }`}
+            title="Próximo dia"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
         {/* Dynamic Interactive Progress Board */}
         <div className={`p-4 rounded-2xl border ${colorTheme.border} bg-white shadow-sm relative overflow-hidden`}>
           <div className="flex justify-between items-center mb-3">
-            <span className="text-xs font-bold text-slate-400 uppercase">Hábitos de Hoje</span>
+            <span className="text-xs font-bold text-slate-400 uppercase">
+              {selectedDate === todayStr ? 'Hábitos de Hoje' : 'Hábitos do Dia'}
+            </span>
             <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${colorTheme.accentBg} ${colorTheme.accentText}`}>
               {completedCount}/5 Cumpridos
             </span>
