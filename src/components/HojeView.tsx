@@ -197,9 +197,21 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
     // Optimistic Update
     const updatedChecks = isChecked
       ? checksDieta.filter(c => c.item_dieta_id !== itemId)
-      : [...checksDieta, { id: 0, usuario_id: usuario.id, item_dieta_id: itemId, data: selectedDate, cumprido: true, e_refeicao_livre: false }];
+      : [...checksDieta.filter(c => c.item_dieta_id !== itemId), { id: 0, usuario_id: usuario.id, item_dieta_id: itemId, data: selectedDate, cumprido: true, e_refeicao_livre: false }];
     
     setChecksDieta(updatedChecks);
+
+    const totalDietMeals = itensDieta.length;
+    const completedDietMeals = updatedChecks.filter(c => c.cumprido).length;
+    const isAllMealsCompleted = totalDietMeals > 0 && completedDietMeals === totalDietMeals;
+
+    if (totalDietMeals > 0) {
+      if (isAllMealsCompleted && !todayCheck.dieta) {
+        setTodayCheck(prev => ({ ...prev, dieta: true }));
+      } else if (!isAllMealsCompleted && todayCheck.dieta) {
+        setTodayCheck(prev => ({ ...prev, dieta: false }));
+      }
+    }
 
     try {
       await api.saveChecksDieta(selectedDate, [
@@ -207,6 +219,23 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
       ]);
       const currentChecks = await api.getChecksDieta(selectedDate);
       setChecksDieta(currentChecks);
+
+      // Verify the final state after the API has completed
+      const finalCompleted = currentChecks.filter(c => c.cumprido).length;
+      const finalIsAllCompleted = totalDietMeals > 0 && finalCompleted === totalDietMeals;
+      
+      if (totalDietMeals > 0) {
+        if (finalIsAllCompleted && !todayCheck.dieta) {
+          const updatedTodayCheck = { ...todayCheck, dieta: true };
+          setTodayCheck(updatedTodayCheck);
+          await api.saveCheck(selectedDate, updatedTodayCheck);
+        } else if (!finalIsAllCompleted && todayCheck.dieta) {
+          const updatedTodayCheck = { ...todayCheck, dieta: false };
+          setTodayCheck(updatedTodayCheck);
+          await api.saveCheck(selectedDate, updatedTodayCheck);
+        }
+      }
+
       await onRefreshChecks(); // Refresh comparison stats
     } catch (err) {
       console.error('Erro ao salvar check da dieta:', err);
