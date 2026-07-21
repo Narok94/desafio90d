@@ -112,7 +112,7 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
     const today = new Date(todayStr + 'T12:00:00');
     const diffTime = today.getTime() - start.getTime();
     if (diffTime >= 0) {
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       const elapsed = Math.min(diffDays, 90);
       setDaysRemaining(90 - elapsed);
     } else {
@@ -522,23 +522,6 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
                 >
                   {savingConfig ? 'Salvando...' : 'Salvar Configurações'}
                 </button>
-
-                <div className="border-t border-slate-100 pt-3 mt-1">
-                  <button
-                    id="btn-view-medals-settings"
-                    onClick={() => {
-                      setShowSettings(false);
-                      setShowProfileModal(true);
-                    }}
-                    className="w-full py-2.5 px-3 bg-amber-50 hover:bg-amber-100/70 border border-amber-200 text-amber-800 rounded-xl font-bold text-xs flex items-center justify-between transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>🏆</span>
-                      <span>Minhas Medalhas &amp; Conquistas</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-amber-500" />
-                  </button>
-                </div>
               </div>
             </motion.div>
           )}
@@ -589,6 +572,47 @@ export default function HojeView({ usuario, onLogout, checks, medidas, fotos, on
               <div className="text-2xl font-display font-black text-slate-900">{daysRemaining}</div>
               <div className="text-[10px] font-bold text-slate-400 uppercase">Dias Restantes 🏁</div>
             </div>
+          </div>
+        </div>
+
+        {/* Achievements Quick Glance Card */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Award className="w-3.5 h-3.5 text-amber-500" />
+              <span>Minhas Medalhas Virtuais</span>
+            </span>
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className="text-[10px] font-extrabold text-blue-500 hover:text-blue-600 uppercase tracking-wider flex items-center gap-0.5 focus:outline-none cursor-pointer"
+            >
+              <span>Ver Perfil</span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-2">
+            {participantBadges.map(badge => (
+              <button
+                key={badge.id}
+                onClick={() => setShowProfileModal(true)}
+                className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer hover:scale-[1.02] flex flex-col items-center justify-center space-y-1 ${
+                  badge.unlocked 
+                    ? `${badge.bgColor} ${badge.borderColor} ${badge.color}` 
+                    : 'bg-slate-50 border-slate-100 opacity-60'
+                }`}
+              >
+                <span className="text-2xl">{badge.unlocked ? badge.emoji : '🔒'}</span>
+                <div className="space-y-0.5">
+                  <div className={`text-[9px] font-black leading-tight ${badge.unlocked ? 'text-slate-800' : 'text-slate-400'}`}>
+                    {badge.day === 30 ? 'Dia 30' : badge.day === 60 ? 'Dia 60' : 'Dia 90'}
+                  </div>
+                  <div className={`text-[8px] font-bold leading-tight ${badge.unlocked ? 'text-amber-600' : 'text-slate-400'}`}>
+                    {badge.unlocked ? 'Desbloqueado' : 'Bloqueado'}
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 

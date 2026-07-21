@@ -4,6 +4,7 @@ import { api, getSavedUsuario, clearSession } from './api';
 import LoginView from './components/LoginView';
 import HojeView from './components/HojeView';
 import DietaView from './components/DietaView';
+import ComprasView from './components/ComprasView';
 import ProgressoView from './components/ProgressoView';
 import HistoricoView from './components/HistoricoView';
 import AdminView from './components/AdminView';
@@ -145,6 +146,13 @@ export default function App() {
 
         {activeTab === 'dieta' && (
           <DietaView
+            usuario={usuario}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {activeTab === 'compras' && (
+          <ComprasView
             usuario={usuario}
             onLogout={handleLogout}
           />
